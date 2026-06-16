@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 import Link from "next/link";
+import { NotificationsWatcher } from "./notifications";
 
 export const metadata: Metadata = {
   title: "Painel de Postagens",
@@ -42,6 +43,12 @@ export default function RootLayout({
               Fila
             </Link>
             <Link
+              href="/calendar"
+              className="text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+            >
+              Calendário
+            </Link>
+            <Link
               href="/new"
               className="ml-auto text-sm font-medium rounded-md bg-neutral-900 text-white px-3 py-1.5 hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
             >
@@ -50,6 +57,7 @@ export default function RootLayout({
           </nav>
         </header>
         <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">{children}</main>
+        <NotificationsWatcher />
       </body>
     </html>
   );

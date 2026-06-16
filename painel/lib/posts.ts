@@ -10,6 +10,7 @@ export type PostMeta = {
   status_ig: NetworkStatus;
   status_li: NetworkStatus;
   tags?: string[];
+  ig_post_id?: string;
 };
 
 export type Post = {

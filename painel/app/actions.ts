@@ -41,6 +41,29 @@ export async function saveSchedule(slug: string, scheduled: string) {
   revalidatePath(`/post/${slug}`);
 }
 
+export async function publishInstagramAction(slug: string): Promise<{ postId: string }> {
+  const post = await getPost(slug);
+  if (!post) throw new Error("Post não encontrado");
+  if (post.meta.status_ig === "posted") throw new Error("Já publicado no Instagram");
+  if (!post.captionIg.trim()) throw new Error("Legenda do Instagram está vazia");
+
+  const { publishInstagram } = await import("@/lib/instagram");
+  const { postId } = await publishInstagram({
+    slug,
+    images: post.images,
+    caption: post.captionIg,
+  });
+
+  await writeMeta(slug, {
+    ...post.meta,
+    status_ig: "posted",
+    ig_post_id: postId,
+  });
+  revalidatePath("/");
+  revalidatePath(`/post/${slug}`);
+  return { postId };
+}
+
 export async function createPostAction(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   const title = String(formData.get("title") ?? "");

@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveCaption, saveSchedule, updateStatus } from "@/app/actions";
+import {
+  publishInstagramAction,
+  saveCaption,
+  saveSchedule,
+  updateStatus,
+} from "@/app/actions";
 import type { NetworkStatus, PostMeta } from "@/lib/posts";
 
 const STATUS_LABELS: Record<NetworkStatus, string> = {
@@ -59,6 +64,7 @@ export function PostEditor({
           initialCaption={initial.captionIg}
           initialStatus={initial.meta.status_ig}
           composerUrl={IG_COMPOSER}
+          igPostId={initial.meta.ig_post_id}
         />
         <NetworkPanel
           slug={slug}
@@ -80,6 +86,7 @@ function NetworkPanel({
   initialCaption,
   initialStatus,
   composerUrl,
+  igPostId,
 }: {
   slug: string;
   network: "ig" | "li";
@@ -87,13 +94,32 @@ function NetworkPanel({
   initialCaption: string;
   initialStatus: NetworkStatus;
   composerUrl: string;
+  igPostId?: string;
 }) {
   const [caption, setCaption] = useState(initialCaption);
   const [status, setStatus] = useState<NetworkStatus>(initialStatus);
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishedId, setPublishedId] = useState<string | undefined>(igPostId);
 
   const dirty = caption !== initialCaption;
+
+  async function handleAutoPublish() {
+    setPublishError(null);
+    setPublishing(true);
+    try {
+      if (dirty) await saveCaption(slug, "ig", caption);
+      const { postId } = await publishInstagramAction(slug);
+      setPublishedId(postId);
+      setStatus("posted");
+    } catch (e) {
+      setPublishError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3">
@@ -176,6 +202,31 @@ function NetworkPanel({
           </button>
         )}
       </div>
+
+      {network === "ig" && status !== "posted" && (
+        <div className="rounded-md bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-800 p-3 space-y-2">
+          <p className="text-xs text-neutral-500">
+            Publicação automática via Graph API (upload no Blob → IG)
+          </p>
+          <button
+            type="button"
+            disabled={publishing || pending}
+            onClick={handleAutoPublish}
+            className="w-full rounded-md bg-pink-600 text-white text-sm font-medium px-3 py-2 hover:bg-pink-700 disabled:opacity-50"
+          >
+            {publishing ? "Publicando…" : "🚀 Publicar no Instagram"}
+          </button>
+          {publishError && (
+            <p className="text-xs text-red-600 dark:text-red-400 break-words">{publishError}</p>
+          )}
+        </div>
+      )}
+
+      {network === "ig" && publishedId && (
+        <p className="text-xs text-neutral-500 font-mono">
+          IG post id: {publishedId}
+        </p>
+      )}
     </section>
   );
 }

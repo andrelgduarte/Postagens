@@ -9,6 +9,9 @@ export type Account = {
   name: string;
   ig_user_id: string;
   token: string;
+  app_id?: string;
+  app_secret?: string;
+  token_expires_at?: string;
   graph_version?: string;
   is_default: boolean;
 };
@@ -83,6 +86,9 @@ function rowToAccount(row: typeof accountsTable.$inferSelect): Account {
     name: row.name,
     ig_user_id: row.igUserId,
     token: row.token,
+    app_id: row.appId ?? undefined,
+    app_secret: row.appSecret ?? undefined,
+    token_expires_at: row.tokenExpiresAt?.toISOString(),
     graph_version: row.graphVersion ?? undefined,
     is_default: row.isDefault,
   };
@@ -149,12 +155,31 @@ async function replaceAccounts(input: Account[], userId: string): Promise<void> 
 }
 
 async function upsertAccountRow(a: Account, userId: string): Promise<void> {
+  // If user gave us app credentials, inspect the token so we know when to renew.
+  let inspectedExpiry: Date | null = a.token_expires_at ? new Date(a.token_expires_at) : null;
+  if (a.app_id && a.app_secret) {
+    try {
+      const { inspectToken } = await import("./meta-token");
+      const info = await inspectToken({
+        token: a.token,
+        appId: a.app_id,
+        appSecret: a.app_secret,
+        version: a.graph_version,
+      });
+      if (info.expiresAt) inspectedExpiry = info.expiresAt;
+    } catch {
+      // ignore: keep the existing expiry
+    }
+  }
   const values = {
     userId,
     externalId: a.id,
     name: a.name,
     igUserId: a.ig_user_id,
     token: a.token,
+    appId: a.app_id ?? null,
+    appSecret: a.app_secret ?? null,
+    tokenExpiresAt: inspectedExpiry,
     graphVersion: a.graph_version ?? null,
     isDefault: a.is_default,
     updatedAt: new Date(),

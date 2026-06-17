@@ -108,6 +108,7 @@ function AccountsSection({
               <div className="text-xs font-mono text-neutral-500 truncate">
                 IG ID: {acc.ig_user_id}
               </div>
+              <TokenExpiryBadge expiresAt={acc.token_expires_at} hasAppCreds={Boolean(acc.app_id && acc.app_secret)} />
             </div>
             {!acc.is_default && (
               <button
@@ -156,6 +157,8 @@ function AccountsSection({
               name: "",
               ig_user_id: "",
               token: "",
+              app_id: "",
+              app_secret: "",
               graph_version: "",
               is_default: accounts.length === 0,
             })
@@ -227,6 +230,26 @@ function AccountForm({
         mono
         type="password"
       />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field
+          label="App ID (opcional)"
+          value={form.app_id ?? ""}
+          onChange={(v) => setForm({ ...form, app_id: v })}
+          placeholder="123456789012345"
+          mono
+        />
+        <Field
+          label="App Secret (opcional)"
+          value={form.app_secret ?? ""}
+          onChange={(v) => setForm({ ...form, app_secret: v })}
+          placeholder="••••••••"
+          mono
+          type="password"
+        />
+      </div>
+      <p className="text-xs text-neutral-500 -mt-1">
+        Preencha App ID e Secret para o sistema renovar o token automaticamente antes de vencer.
+      </p>
       <Field
         label="Graph version (opcional)"
         value={form.graph_version ?? ""}
@@ -265,6 +288,38 @@ function AccountForm({
       </div>
     </div>
   );
+}
+
+function TokenExpiryBadge({
+  expiresAt,
+  hasAppCreds,
+}: {
+  expiresAt?: string;
+  hasAppCreds: boolean;
+}) {
+  if (!expiresAt) {
+    return hasAppCreds ? (
+      <div className="mt-1 text-[11px] text-neutral-500">validade do token desconhecida</div>
+    ) : (
+      <div className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+        sem App ID/Secret — renovação manual
+      </div>
+    );
+  }
+  const days = Math.round((new Date(expiresAt).getTime() - Date.now()) / 86_400_000);
+  const tone =
+    days < 0
+      ? "text-red-700 dark:text-red-400"
+      : days <= 7
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-neutral-500";
+  const label =
+    days < 0
+      ? `token expirado há ${Math.abs(days)} dia(s)`
+      : days === 0
+        ? "token vence hoje"
+        : `token vence em ${days} dia(s)`;
+  return <div className={`mt-1 text-[11px] ${tone}`}>{label}</div>;
 }
 
 function DefaultsSection({ defaults }: { defaults: Config["defaults"] }) {

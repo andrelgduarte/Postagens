@@ -11,6 +11,7 @@ import { showToast } from "./notify";
 import { collectInsightsTick } from "./insights";
 import { getUserEmail, workerUserId } from "./auth";
 import { resendEnabled, sendEmail } from "./email";
+import { maintainTokens } from "./token-maintenance";
 
 export type TickOptions = {
   now?: Date;
@@ -213,6 +214,17 @@ export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
     });
     await logEvent({ event: "tick_end" });
     return result;
+  }
+
+  if (!opts.dryRun) {
+    try {
+      await maintainTokens(now);
+    } catch (e) {
+      await logEvent({
+        event: "publish_fail",
+        message: `token maintenance: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
   }
 
   const candidates = await findDuePosts(now, config);

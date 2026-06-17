@@ -93,8 +93,10 @@ function Section({
                   />
                 ) : p.videos[0] ? (
                   <video
-                    src={imageUrl(p.slug, p.videos[0])}
+                    src={`${imageUrl(p.slug, p.videos[0])}#t=0.5`}
+                    preload="metadata"
                     muted
+                    playsInline
                     className="w-full h-full object-cover"
                   />
                 ) : (

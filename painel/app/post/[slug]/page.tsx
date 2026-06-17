@@ -67,8 +67,10 @@ function MediaPreview({
           className="relative shrink-0 w-72 aspect-square rounded-lg overflow-hidden bg-black snap-start"
         >
           <video
-            src={imageUrl(slug, v)}
+            src={`${imageUrl(slug, v)}#t=0.5`}
             controls
+            preload="metadata"
+            playsInline
             className="w-full h-full object-contain"
           />
           <span className="absolute bottom-2 left-2 rounded bg-black/60 text-white text-xs px-1.5 py-0.5">

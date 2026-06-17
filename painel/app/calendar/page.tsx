@@ -175,6 +175,14 @@ export default async function CalendarPage({
                         alt=""
                         className="w-6 h-6 rounded object-cover shrink-0"
                       />
+                    ) : p.videos[0] ? (
+                      <video
+                        src={`${imageUrl(p.slug, p.videos[0])}#t=0.5`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="w-6 h-6 rounded object-cover shrink-0"
+                      />
                     ) : (
                       <div className="w-6 h-6 rounded bg-neutral-200 dark:bg-neutral-700 shrink-0" />
                     )}

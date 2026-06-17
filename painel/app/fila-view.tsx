@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { bulkDelete, bulkSetAccount, bulkSetAutoPublish } from "@/app/actions";
-import { imageUrl, type NetworkStatus, type PostType } from "@/lib/posts";
+import { imageUrl } from "@/lib/media-url";
+
+type NetworkStatus = "queued" | "posted" | "skipped" | "failed";
+type PostType = "single" | "carousel" | "reel" | "story";
 
 const TYPE_LABEL: Record<PostType, string> = {
   single: "imagem",

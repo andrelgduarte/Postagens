@@ -493,9 +493,7 @@ export async function createPost(opts: {
   return slug;
 }
 
-export function imageUrl(slug: string, filename: string): string {
-  return `/api/img/${encodeURIComponent(slug)}/${encodeURIComponent(filename)}`;
-}
+export { imageUrl } from "./media-url";
 
 export async function deletePostBySlug(slug: string, userId?: string): Promise<boolean> {
   const uid = await resolveUserId(userId);

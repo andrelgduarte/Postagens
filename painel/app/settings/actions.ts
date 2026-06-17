@@ -111,6 +111,13 @@ export async function saveNotifications(
   revalidatePath("/settings");
 }
 
+export async function saveLinkedIn(linkedin: Partial<Config["linkedin"]>): Promise<void> {
+  const config = await loadConfig();
+  config.linkedin = { ...config.linkedin, ...linkedin };
+  await saveConfig(config);
+  revalidatePath("/settings");
+}
+
 function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
   if (value === undefined || Number.isNaN(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));

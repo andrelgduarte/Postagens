@@ -41,6 +41,9 @@ export type Config = {
     advance_minutes: number;
     toast_on_publish: boolean;
   };
+  linkedin: {
+    webhook_url: string;
+  };
 };
 
 const CONFIG_KEY = "main";
@@ -67,6 +70,9 @@ const DEFAULT_STORED: StoredConfig = {
     advance_minutes: 0,
     toast_on_publish: true,
   },
+  linkedin: {
+    webhook_url: "",
+  },
 };
 
 export const DEFAULT_CONFIG: Config = { accounts: [], ...DEFAULT_STORED };
@@ -77,6 +83,7 @@ function mergeStored(partial: Partial<StoredConfig>): StoredConfig {
     scheduler: { ...DEFAULT_STORED.scheduler, ...partial.scheduler },
     staging_dir: partial.staging_dir ?? DEFAULT_STORED.staging_dir,
     notifications: { ...DEFAULT_STORED.notifications, ...partial.notifications },
+    linkedin: { ...DEFAULT_STORED.linkedin, ...partial.linkedin },
   };
 }
 
@@ -125,6 +132,7 @@ async function saveStored(config: Config, userId: string): Promise<void> {
     scheduler: config.scheduler,
     staging_dir: config.staging_dir,
     notifications: config.notifications,
+    linkedin: config.linkedin,
   };
   await db
     .insert(appConfig)

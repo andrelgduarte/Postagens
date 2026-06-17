@@ -1,7 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-export const LOG_PATH = path.resolve(process.cwd(), "publish.log");
+function resolveLogPath(): string {
+  if (process.env.VERCEL) return "/tmp/publish.log";
+  return path.resolve(process.cwd(), "publish.log");
+}
+
+export const LOG_PATH = resolveLogPath();
 
 export type LogEvent = {
   ts: string;
@@ -23,8 +28,14 @@ export type LogEvent = {
 };
 
 export async function logEvent(event: Omit<LogEvent, "ts">): Promise<void> {
-  const line = JSON.stringify({ ts: new Date().toISOString(), ...event }) + "\n";
-  await fs.appendFile(LOG_PATH, line, "utf8");
+  const payload = { ts: new Date().toISOString(), ...event };
+  const line = JSON.stringify(payload) + "\n";
+  if (process.env.VERCEL) console.log("[publish-log]", line.trim());
+  try {
+    await fs.appendFile(LOG_PATH, line, "utf8");
+  } catch {
+    // best-effort: log file not writable (read-only FS, permissions, etc.)
+  }
 }
 
 export async function readLog(limit = 200): Promise<LogEvent[]> {

@@ -2,8 +2,20 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
-import { loadConfig } from "./config";
-import { createPost, writeCaption, type PostType } from "./posts";
+import { db } from "./db/client";
+import {
+  captions as captionsTable,
+  media as mediaTable,
+  posts as postsTable,
+} from "./db/schema";
+import { getAccountUuid, loadConfig } from "./config";
+import {
+  nextAvailableSlug,
+  slugify,
+  type PostType,
+} from "./posts";
+import { currentUserId } from "./auth";
+import { blobEnabled, uploadMediaBlob } from "./blob";
 
 const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
 const VIDEO_RE = /\.(mp4|mov|m4v)$/i;
@@ -46,6 +58,106 @@ export type StagingEntry =
       relPath: string;
       message: string;
     };
+
+const CONTENT_TYPE: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".m4v": "video/x-m4v",
+};
+
+function classify(filename: string): "image" | "video" | null {
+  if (IMAGE_RE.test(filename)) return "image";
+  if (VIDEO_RE.test(filename)) return "video";
+  return null;
+}
+
+export function parseFrontmatter(raw: string): PostFrontmatter {
+  return PostFrontmatter.parse(YAML.parse(raw));
+}
+
+export function validateFrontmatter(value: unknown): PostFrontmatter {
+  return PostFrontmatter.parse(value);
+}
+
+function detectType(fm: PostFrontmatter, mediaCount: number, hasVideo: boolean): PostType {
+  if (fm.type) return fm.type;
+  if (hasVideo) return "reel";
+  return mediaCount >= 2 ? "carousel" : "single";
+}
+
+function parseScheduled(date: string, time?: string): Date | null {
+  if (!time) {
+    const d = new Date(`${date}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(`${date}T${time}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export type ImportPayload = {
+  frontmatter: PostFrontmatter;
+  media: {
+    filename: string;
+    kind: "image" | "video";
+    url: string;
+    sizeBytes?: number;
+    contentType?: string;
+  }[];
+  userId?: string;
+};
+
+// Pure DB import — used by the browser uploader and the local CLI.
+export async function importFromPayload(opts: ImportPayload): Promise<{ slug: string }> {
+  const uid = opts.userId ?? (await currentUserId());
+  const fm = opts.frontmatter;
+  if (opts.media.length === 0) throw new Error("Sem mídia");
+
+  const slugBase = `${fm.date}-${slugify(fm.title) || "post"}`;
+  const slug = await nextAvailableSlug(slugBase, uid);
+  const hasVideo = opts.media.some((m) => m.kind === "video");
+  const type = detectType(fm, opts.media.length, hasVideo);
+  const accountUuid = fm.account_id ? await getAccountUuid(fm.account_id, uid) : null;
+  const scheduled = parseScheduled(fm.date, fm.time);
+
+  const [inserted] = await db
+    .insert(postsTable)
+    .values({
+      userId: uid,
+      slug,
+      date: fm.date,
+      title: fm.title,
+      type,
+      autoPublish: fm.auto_publish ?? false,
+      accountId: accountUuid,
+      scheduled,
+    })
+    .returning({ id: postsTable.id });
+
+  await db.insert(captionsTable).values([
+    { postId: inserted.id, network: "ig", content: fm.caption_ig ?? "" },
+    { postId: inserted.id, network: "li", content: fm.caption_li ?? "" },
+  ]);
+
+  await db.insert(mediaTable).values(
+    opts.media.map((m, idx) => ({
+      postId: inserted.id,
+      kind: m.kind,
+      filename: m.filename,
+      sortOrder: idx,
+      blobUrl: m.url,
+      sizeBytes: m.sizeBytes ?? null,
+      contentType: m.contentType ?? CONTENT_TYPE[path.extname(m.filename).toLowerCase()] ?? null,
+    }))
+  );
+
+  return { slug };
+}
+
+// ----- Local FS staging scanner (CLI workflow) -----
 
 export async function stagingRoot(): Promise<string> {
   const config = await loadConfig();
@@ -122,11 +234,6 @@ async function resolveMedia(folder: string, fm: PostFrontmatter): Promise<string
   return entries.filter((f) => re.test(f)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-function detectType(fm: PostFrontmatter, mediaCount: number): PostType {
-  if (fm.type) return fm.type;
-  return mediaCount >= 2 ? "carousel" : "single";
-}
-
 export type ImportResult = {
   relPath: string;
   slug?: string;
@@ -138,24 +245,40 @@ export async function importEntry(entry: StagingEntry): Promise<ImportResult> {
     return { relPath: entry.relPath, error: entry.message };
   }
   try {
-    const buffers = await Promise.all(
-      entry.mediaFiles.map(async (name) => ({
-        name,
-        buffer: await fs.readFile(path.join(entry.folder, name)),
-      }))
-    );
     const fm = entry.frontmatter;
-    const slug = await createPost({
-      date: fm.date,
-      title: fm.title,
-      images: buffers,
-      type: detectType(fm, buffers.length),
-      auto_publish: fm.auto_publish,
-      account_id: fm.account_id,
+    const useBlob = blobEnabled();
+    const userId = process.env.WORKER_USER_ID || process.env.DEV_USER_ID || "default-user";
+
+    const media: ImportPayload["media"] = [];
+    for (const filename of entry.mediaFiles) {
+      const kind = classify(filename);
+      if (!kind) continue;
+      const buffer = await fs.readFile(path.join(entry.folder, filename));
+      const ext = path.extname(filename).toLowerCase();
+      const contentType = CONTENT_TYPE[ext];
+
+      let url: string;
+      if (useBlob) {
+        const slugBase = `${fm.date}-${slugify(fm.title) || "post"}`;
+        const result = await uploadMediaBlob({
+          userId,
+          slug: slugBase,
+          filename,
+          buffer,
+          contentType,
+        });
+        url = result.url;
+      } else {
+        throw new Error("Blob não configurado e a CLI agora sempre sobe pro Blob");
+      }
+      media.push({ filename, kind, url, sizeBytes: buffer.length, contentType });
+    }
+
+    const { slug } = await importFromPayload({
+      frontmatter: fm,
+      media,
+      userId,
     });
-    if (fm.caption_ig) await writeCaption(slug, "ig", fm.caption_ig);
-    if (fm.caption_li) await writeCaption(slug, "li", fm.caption_li);
-    if (fm.time) await applyScheduledTime(slug, fm.date, fm.time);
     await moveToImported(entry.folder, entry.relPath);
     return { relPath: entry.relPath, slug };
   } catch (e) {
@@ -164,15 +287,6 @@ export async function importEntry(entry: StagingEntry): Promise<ImportResult> {
       error: e instanceof Error ? e.message : String(e),
     };
   }
-}
-
-async function applyScheduledTime(slug: string, date: string, time: string): Promise<void> {
-  const { POSTS_DIR } = await import("./posts");
-  const metaPath = path.join(POSTS_DIR, slug, "meta.json");
-  const raw = await fs.readFile(metaPath, "utf8");
-  const meta = JSON.parse(raw);
-  meta.scheduled = `${date}T${time}`;
-  await fs.writeFile(metaPath, JSON.stringify(meta, null, 2) + "\n", "utf8");
 }
 
 async function moveToImported(folder: string, relPath: string): Promise<void> {

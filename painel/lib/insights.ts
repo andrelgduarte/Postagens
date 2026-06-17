@@ -1,6 +1,7 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { POSTS_DIR, listPosts } from "./posts";
+import { asc, eq, inArray } from "drizzle-orm";
+import { db } from "./db/client";
+import { insights as insightsTable, posts as postsTable } from "./db/schema";
+import { getPostId, getPostIdGlobal, listPosts, listAllPosts } from "./posts";
 import { getAccount } from "./config";
 import { logEvent } from "./publish-log";
 
@@ -36,21 +37,63 @@ const MILESTONE_MIN_HOURS: Record<Milestone, number> = {
 
 const MILESTONE_ORDER: Milestone[] = ["24h", "3d", "7d"];
 
-export function insightsPath(slug: string): string {
-  return path.join(POSTS_DIR, slug, "insights.json");
+type InsightRow = typeof insightsTable.$inferSelect;
+
+function rowToSnapshot(row: InsightRow): InsightSnapshot {
+  return {
+    at: row.capturedAt.toISOString(),
+    age_hours: row.ageHours ? Number(row.ageHours) : 0,
+    milestone: row.milestone as Milestone,
+    metrics: {
+      reach: row.reach ?? undefined,
+      likes: row.likes ?? undefined,
+      comments: row.comments ?? undefined,
+      shares: row.shares ?? undefined,
+      saved: row.saved ?? undefined,
+    },
+  };
 }
 
-export async function readInsights(slug: string): Promise<Insights> {
-  try {
-    const raw = await fs.readFile(insightsPath(slug), "utf8");
-    return JSON.parse(raw) as Insights;
-  } catch {
-    return { snapshots: [] };
-  }
+export async function readInsights(slug: string, userId?: string): Promise<Insights> {
+  const postId = userId
+    ? await getPostId(slug, userId)
+    : await (async () => {
+        try {
+          return await getPostId(slug);
+        } catch {
+          return await getPostIdGlobal(slug);
+        }
+      })();
+  if (!postId) return { snapshots: [] };
+  const rows = await db
+    .select()
+    .from(insightsTable)
+    .where(eq(insightsTable.postId, postId))
+    .orderBy(asc(insightsTable.capturedAt));
+  return { snapshots: rows.map(rowToSnapshot) };
 }
 
-export async function writeInsights(slug: string, data: Insights): Promise<void> {
-  await fs.writeFile(insightsPath(slug), JSON.stringify(data, null, 2) + "\n", "utf8");
+export async function upsertSnapshotGlobal(slug: string, snapshot: InsightSnapshot): Promise<void> {
+  const postId = await getPostIdGlobal(slug);
+  if (!postId) throw new Error(`Post ${slug} não encontrado`);
+  const values = {
+    postId,
+    milestone: snapshot.milestone,
+    capturedAt: new Date(snapshot.at),
+    ageHours: snapshot.age_hours.toFixed(2),
+    reach: snapshot.metrics.reach ?? null,
+    likes: snapshot.metrics.likes ?? null,
+    comments: snapshot.metrics.comments ?? null,
+    shares: snapshot.metrics.shares ?? null,
+    saved: snapshot.metrics.saved ?? null,
+  };
+  await db
+    .insert(insightsTable)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [insightsTable.postId, insightsTable.milestone],
+      set: values,
+    });
 }
 
 export function ageHours(publishedAt: string, now: Date): number {
@@ -102,30 +145,29 @@ export type CollectResult = {
 };
 
 export async function collectInsightsTick(now: Date): Promise<CollectResult[]> {
-  const posts = await listPosts();
+  const posts = await listAllPosts();
   const out: CollectResult[] = [];
   for (const p of posts) {
     const m = p.meta;
     if (m.status_ig !== "posted") continue;
     if (!m.ig_post_id || !m.published_at) continue;
     const ageH = ageHours(m.published_at, now);
-    const existing = await readInsights(p.slug);
+    const existing = await readInsights(p.slug, p.userId);
     const ms = nextMilestone(existing, ageH);
     if (!ms) continue;
     try {
-      const account = await getAccount(m.account_id);
+      const account = await getAccount(m.account_id, p.userId);
       const metrics = await fetchInsights(
         m.ig_post_id,
         account.token,
         account.graph_version ?? "v22.0"
       );
-      existing.snapshots.push({
+      await upsertSnapshotGlobal(p.slug, {
         at: now.toISOString(),
         age_hours: Math.round(ageH * 10) / 10,
         milestone: ms,
         metrics,
       });
-      await writeInsights(p.slug, existing);
       await logEvent({ event: "publish_ok", slug: p.slug, message: `insights ${ms}` });
       out.push({ slug: p.slug, milestone: ms, ok: true });
     } catch (e) {
@@ -146,19 +188,39 @@ export type PostInsightsSummary = {
   snapshots: number;
 };
 
-export async function summarizeAll(): Promise<PostInsightsSummary[]> {
-  const posts = await listPosts();
+export async function summarizeAll(userId?: string): Promise<PostInsightsSummary[]> {
+  const posts = await listPosts(userId);
+  const postedSlugs = posts.filter((p) => p.meta.status_ig === "posted");
+  if (postedSlugs.length === 0) return [];
+  const postIdRows = await db
+    .select({ id: postsTable.id, slug: postsTable.slug })
+    .from(postsTable)
+    .where(inArray(postsTable.slug, postedSlugs.map((p) => p.slug)));
+  const idToSlug = new Map(postIdRows.map((r) => [r.id, r.slug]));
+  const insightRows = await db
+    .select()
+    .from(insightsTable)
+    .where(inArray(insightsTable.postId, postIdRows.map((r) => r.id)))
+    .orderBy(asc(insightsTable.capturedAt));
+  const bySlug = new Map<string, InsightRow[]>();
+  for (const r of insightRows) {
+    const slug = idToSlug.get(r.postId);
+    if (!slug) continue;
+    if (!bySlug.has(slug)) bySlug.set(slug, []);
+    bySlug.get(slug)!.push(r);
+  }
+
   const out: PostInsightsSummary[] = [];
-  for (const p of posts) {
-    if (p.meta.status_ig !== "posted") continue;
-    const ins = await readInsights(p.slug);
+  for (const p of postedSlugs) {
+    const rows = bySlug.get(p.slug) ?? [];
+    const last = rows[rows.length - 1];
     out.push({
       slug: p.slug,
       date: p.date,
       title: p.title,
       type: p.meta.type,
-      last: ins.snapshots[ins.snapshots.length - 1],
-      snapshots: ins.snapshots.length,
+      last: last ? rowToSnapshot(last) : undefined,
+      snapshots: rows.length,
     });
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));

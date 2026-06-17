@@ -1,9 +1,16 @@
 import { loadConfig, type Config } from "./config";
-import { getPost, listPosts, writeMeta, type PostMeta } from "./posts";
+import {
+  getPostBySlugGlobal,
+  listAllPosts,
+  writeMetaGlobal,
+  type PostMeta,
+} from "./posts";
 import { publishInstagram } from "./instagram";
 import { logEvent } from "./publish-log";
 import { showToast } from "./notify";
 import { collectInsightsTick } from "./insights";
+import { getUserEmail, workerUserId } from "./auth";
+import { resendEnabled, sendEmail } from "./email";
 
 export type TickOptions = {
   now?: Date;
@@ -55,7 +62,7 @@ export type DueCandidate = {
 };
 
 export async function findDuePosts(now: Date, config: Config): Promise<DueCandidate[]> {
-  const posts = await listPosts();
+  const posts = await listAllPosts();
   const out: DueCandidate[] = [];
   for (const p of posts) {
     const m = p.meta;
@@ -88,7 +95,7 @@ async function publishOne(
   now: Date,
   opts: TickOptions
 ): Promise<{ ok: true; postId: string; accountName: string } | { ok: false; reason: string }> {
-  const post = await getPost(slug);
+  const post = await getPostBySlugGlobal(slug);
   if (!post) return { ok: false, reason: "post não existe" };
 
   const meta = post.meta;
@@ -122,6 +129,7 @@ async function publishOne(
       videos: post.videos,
       caption: post.captionIg,
       accountId: meta.account_id,
+      userId: post.userId,
     });
     const next: PostMeta = {
       ...meta,
@@ -132,7 +140,7 @@ async function publishOne(
       last_error: undefined,
       published_at: now.toISOString(),
     };
-    await writeMeta(slug, next);
+    await writeMetaGlobal(slug, next);
     return { ok: true, postId, accountName };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
@@ -144,7 +152,7 @@ async function publishOne(
       last_attempt: now.toISOString(),
       last_error: reason,
     };
-    await writeMeta(slug, next);
+    await writeMetaGlobal(slug, next);
     if (giveUp) {
       await logEvent({ event: "give_up", slug, attempt, message: reason });
     } else {
@@ -159,9 +167,26 @@ async function publishOne(
   }
 }
 
+async function notifyByEmail(
+  userId: string,
+  opts: { subject: string; text: string }
+): Promise<void> {
+  if (!resendEnabled()) return;
+  try {
+    const to = await getUserEmail(userId);
+    if (!to) return;
+    await sendEmail({ to, subject: opts.subject, text: opts.text });
+  } catch (e) {
+    await logEvent({
+      event: "publish_fail",
+      message: `email notify: ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+}
+
 export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
   const now = opts.now ?? new Date();
-  const config = await loadConfig();
+  const config = await loadConfig(workerUserId());
   const result: TickResult = {
     considered: 0,
     published: [],
@@ -200,6 +225,7 @@ export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
       continue;
     }
     await logEvent({ event: "due", slug: c.slug });
+    const post = await getPostBySlugGlobal(c.slug);
     const r = await publishOne(c.slug, config, now, opts);
     if (r.ok) {
       result.published.push(c.slug);
@@ -212,6 +238,14 @@ export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
       if (opts.notify) {
         showToast(`✓ Postado no IG`, `${c.slug} (${r.accountName})`).catch(() => {});
       }
+      if (!opts.dryRun && post) {
+        await notifyByEmail(post.userId, {
+          subject: `✓ Postado no IG: ${post.title}`,
+          text:
+            `Post publicado com sucesso.\n\n` +
+            `Slug: ${c.slug}\nTítulo: ${post.title}\nConta: ${r.accountName}\nIG post id: ${r.postId}\n`,
+        });
+      }
     } else {
       result.failed.push({ slug: c.slug, reason: r.reason });
       await logEvent({
@@ -221,6 +255,14 @@ export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
       });
       if (opts.notify) {
         showToast(`✗ Falha no IG`, `${c.slug}: ${r.reason}`.slice(0, 200)).catch(() => {});
+      }
+      if (!opts.dryRun && post) {
+        await notifyByEmail(post.userId, {
+          subject: `✗ Falha ao publicar no IG: ${post.title}`,
+          text:
+            `Tentativa de publicação falhou.\n\n` +
+            `Slug: ${c.slug}\nTítulo: ${post.title}\nErro: ${r.reason}\n`,
+        });
       }
     }
   }

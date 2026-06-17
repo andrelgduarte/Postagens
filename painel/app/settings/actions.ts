@@ -115,5 +115,3 @@ function clamp(value: number | undefined, min: number, max: number, fallback: nu
   if (value === undefined || Number.isNaN(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
 }
-
-export const POST_TYPES: PostType[] = ["single", "carousel", "reel", "story"];

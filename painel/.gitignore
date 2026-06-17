@@ -5,3 +5,6 @@ out
 .env*.local
 config.json
 publish.log
+
+.vercel
+.env*

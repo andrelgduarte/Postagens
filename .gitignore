@@ -20,3 +20,7 @@ Thumbs.db
 # config + staging
 painel/config.json
 staging/
+
+# pastas pessoais (fontes de publicação) — só no root, não em subpastas
+/Import/
+/60_Dias/

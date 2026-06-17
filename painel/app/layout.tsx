@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
+import { ClerkProvider } from "@clerk/nextjs";
+import { NotificationsWatcher } from "./notifications";
+import { NavAuth } from "./nav-auth";
+import { clerkEnabled } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,19 +17,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-import Link from "next/link";
-import { NotificationsWatcher } from "./notifications";
-
 export const metadata: Metadata = {
   title: "Painel de Postagens",
   description: "Fila local de posts para Instagram e LinkedIn",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+function Shell({ children }: { children: React.ReactNode }) {
+  const clerk = clerkEnabled();
   return (
     <html
       lang="pt-BR"
@@ -72,6 +71,11 @@ export default function RootLayout({
             >
               + Novo post
             </Link>
+            {clerk && (
+              <div className="flex items-center gap-3">
+                <NavAuth />
+              </div>
+            )}
           </nav>
         </header>
         <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">{children}</main>
@@ -79,4 +83,19 @@ export default function RootLayout({
       </body>
     </html>
   );
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  if (clerkEnabled()) {
+    return (
+      <ClerkProvider>
+        <Shell>{children}</Shell>
+      </ClerkProvider>
+    );
+  }
+  return <Shell>{children}</Shell>;
 }

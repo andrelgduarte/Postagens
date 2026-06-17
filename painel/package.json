@@ -10,25 +10,39 @@
     "import": "tsx scripts/import.ts",
     "scheduler": "tsx --env-file=.env.local scripts/scheduler.ts",
     "scheduler:loop": "tsx --env-file=.env.local scripts/scheduler.ts --loop",
-    "scheduler:dry": "tsx --env-file=.env.local scripts/scheduler.ts --dry-run --no-notify"
+    "scheduler:dry": "tsx --env-file=.env.local scripts/scheduler.ts --dry-run --no-notify",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file=.env.local scripts/db-migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx --env-file=.env.local scripts/seed-from-fs.ts",
+    "blob:migrate": "tsx --env-file=.env.local scripts/blob-migrate.ts",
+    "user:reassign": "tsx --env-file=.env.local scripts/reassign-user.ts",
+    "email:test": "tsx --env-file=.env.local scripts/email-test.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.3",
     "@vercel/blob": "^2.4.0",
+    "drizzle-orm": "^0.45.2",
     "next": "16.2.9",
+    "pg": "^8.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "resend": "^6.13.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }

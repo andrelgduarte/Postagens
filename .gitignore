@@ -16,3 +16,7 @@ Thumbs.db
 
 # claude local settings
 .claude/
+
+# config + staging
+painel/config.json
+staging/

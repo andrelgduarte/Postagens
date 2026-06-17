@@ -1,0 +1,22 @@
+{
+  "snapshots": [
+    {
+      "at": "2026-06-13T08:05:00.000Z",
+      "age_hours": 24.1,
+      "milestone": "24h",
+      "metrics": { "reach": 4250, "likes": 311, "comments": 45, "shares": 27, "saved": 52 }
+    },
+    {
+      "at": "2026-06-15T08:10:00.000Z",
+      "age_hours": 72.2,
+      "milestone": "3d",
+      "metrics": { "reach": 6120, "likes": 408, "comments": 61, "shares": 39, "saved": 71 }
+    },
+    {
+      "at": "2026-06-19T08:00:00.000Z",
+      "age_hours": 168.0,
+      "milestone": "7d",
+      "metrics": { "reach": 7950, "likes": 502, "comments": 78, "shares": 47, "saved": 89 }
+    }
+  ]
+}

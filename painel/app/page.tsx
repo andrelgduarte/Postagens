@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { imageUrl, listPosts, type NetworkStatus } from "@/lib/posts";
+import { imageUrl, listPosts, type NetworkStatus, type PostType } from "@/lib/posts";
+
+const TYPE_LABEL: Record<PostType, string> = {
+  single: "imagem",
+  carousel: "carrossel",
+  reel: "reel",
+  story: "story",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +16,9 @@ function StatusBadge({ label, status }: { label: string; status: NetworkStatus }
       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
       : status === "skipped"
         ? "bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-        : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+        : status === "failed"
+          ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
   return (
     <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${color}`}>
       {label} · {status}
@@ -82,10 +91,21 @@ function Section({
                     alt={p.title}
                     className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
                   />
+                ) : p.videos[0] ? (
+                  <video
+                    src={imageUrl(p.slug, p.videos[0])}
+                    muted
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-neutral-400 text-sm">
-                    sem imagem
+                    sem mídia
                   </div>
+                )}
+                {p.meta.type && (
+                  <span className="absolute top-2 left-2 rounded bg-black/60 text-white text-xs px-1.5 py-0.5">
+                    {TYPE_LABEL[p.meta.type]}
+                  </span>
                 )}
                 {p.images.length > 1 && (
                   <span className="absolute top-2 right-2 rounded bg-black/60 text-white text-xs px-1.5 py-0.5">

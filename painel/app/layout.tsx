@@ -49,6 +49,24 @@ export default function RootLayout({
               Calendário
             </Link>
             <Link
+              href="/analytics"
+              className="text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+            >
+              Insights
+            </Link>
+            <Link
+              href="/import"
+              className="text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+            >
+              Importar
+            </Link>
+            <Link
+              href="/settings"
+              className="text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+            >
+              Configurações
+            </Link>
+            <Link
               href="/new"
               className="ml-auto text-sm font-medium rounded-md bg-neutral-900 text-white px-3 py-1.5 hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
             >

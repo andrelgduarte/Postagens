@@ -3,13 +3,41 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createPostAction } from "@/app/actions";
+import type { PostType } from "@/lib/posts";
 
 type Preview = { file: File; url: string };
 
-export function NewPostForm({ defaultDate }: { defaultDate: string }) {
+type AccountOption = { id: string; name: string; is_default: boolean };
+
+type DefaultsHint = {
+  type: PostType;
+  auto_publish: boolean;
+};
+
+const TYPE_LABELS: Record<PostType, string> = {
+  single: "Imagem única",
+  carousel: "Carrossel",
+  reel: "Reel (vídeo)",
+  story: "Story",
+};
+
+const TYPE_OPTIONS: PostType[] = ["single", "carousel", "reel", "story"];
+
+export function NewPostForm({
+  defaultDate,
+  accounts,
+  defaults,
+}: {
+  defaultDate: string;
+  accounts: AccountOption[];
+  defaults: DefaultsHint;
+}) {
   const router = useRouter();
   const [date, setDate] = useState(defaultDate);
   const [title, setTitle] = useState("");
+  const [type, setType] = useState<PostType>(defaults.type);
+  const [autoPublish, setAutoPublish] = useState<boolean>(defaults.auto_publish);
+  const [accountId, setAccountId] = useState<string>("");
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -55,6 +83,9 @@ export function NewPostForm({ defaultDate }: { defaultDate: string }) {
     const formData = new FormData();
     formData.set("date", date);
     formData.set("title", title);
+    formData.set("type", type);
+    formData.set("auto_publish", autoPublish ? "true" : "false");
+    if (accountId) formData.set("account_id", accountId);
     previews.forEach((p, idx) => {
       const ext = p.file.name.split(".").pop() ?? "jpg";
       const renamed = `${String(idx + 1).padStart(2, "0")}.${ext}`;
@@ -91,6 +122,49 @@ export function NewPostForm({ defaultDate }: { defaultDate: string }) {
             placeholder="ex: dica de produtividade"
             className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
           />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-neutral-500">Tipo</span>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as PostType)}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
+          >
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-neutral-500">Conta IG</span>
+          <select
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            disabled={accounts.length === 0}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
+          >
+            <option value="">
+              {accounts.length === 0 ? "Configure em /settings" : "Padrão"}
+            </option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm sm:self-end sm:pb-1.5">
+          <input
+            type="checkbox"
+            checked={autoPublish}
+            onChange={(e) => setAutoPublish(e.target.checked)}
+          />
+          <span>Publicar sozinho no horário</span>
         </label>
       </div>
 

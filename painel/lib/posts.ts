@@ -3,7 +3,9 @@ import path from "node:path";
 
 export const POSTS_DIR = path.resolve(process.cwd(), "..", "posts");
 
-export type NetworkStatus = "queued" | "posted" | "skipped";
+export type NetworkStatus = "queued" | "posted" | "skipped" | "failed";
+
+export type PostType = "single" | "carousel" | "reel" | "story";
 
 export type PostMeta = {
   scheduled?: string;
@@ -11,6 +13,13 @@ export type PostMeta = {
   status_li: NetworkStatus;
   tags?: string[];
   ig_post_id?: string;
+  type?: PostType;
+  auto_publish?: boolean;
+  account_id?: string;
+  attempts?: number;
+  last_attempt?: string;
+  last_error?: string;
+  published_at?: string;
 };
 
 export type Post = {
@@ -18,6 +27,7 @@ export type Post = {
   date: string;
   title: string;
   images: string[];
+  videos: string[];
   meta: PostMeta;
 };
 
@@ -68,6 +78,18 @@ async function listImages(slug: string): Promise<string[]> {
   }
 }
 
+async function listVideos(slug: string): Promise<string[]> {
+  const dir = path.join(POSTS_DIR, slug);
+  try {
+    const entries = await fs.readdir(dir);
+    return entries
+      .filter((f) => /\.(mp4|mov|m4v)$/i.test(f))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  } catch {
+    return [];
+  }
+}
+
 function parseSlug(slug: string): { date: string; title: string } | null {
   const match = SLUG_REGEX.exec(slug);
   if (!match) return null;
@@ -86,8 +108,9 @@ export async function listPosts(): Promise<Post[]> {
       .map(async (e) => {
         const parsed = parseSlug(e.name);
         if (!parsed) return null;
-        const [images, meta] = await Promise.all([
+        const [images, videos, meta] = await Promise.all([
           listImages(e.name),
+          listVideos(e.name),
           readMeta(e.name),
         ]);
         return {
@@ -95,6 +118,7 @@ export async function listPosts(): Promise<Post[]> {
           date: parsed.date,
           title: parsed.title,
           images,
+          videos,
           meta,
         } satisfies Post;
       })
@@ -113,8 +137,9 @@ export async function getPost(slug: string): Promise<PostDetail | null> {
   } catch {
     return null;
   }
-  const [images, meta, captionIg, captionLi] = await Promise.all([
+  const [images, videos, meta, captionIg, captionLi] = await Promise.all([
     listImages(slug),
+    listVideos(slug),
     readMeta(slug),
     readCaption(slug, "ig"),
     readCaption(slug, "li"),
@@ -124,6 +149,7 @@ export async function getPost(slug: string): Promise<PostDetail | null> {
     date: parsed.date,
     title: parsed.title,
     images,
+    videos,
     meta,
     captionIg,
     captionLi,
@@ -158,6 +184,9 @@ export async function createPost(opts: {
   date: string;
   title: string;
   images: { name: string; buffer: Buffer }[];
+  type?: PostType;
+  auto_publish?: boolean;
+  account_id?: string;
 }): Promise<string> {
   await ensurePostsDir();
   const slugBase = `${opts.date}-${slugify(opts.title) || "post"}`;
@@ -186,10 +215,17 @@ export async function createPost(opts: {
     })
   );
 
+  const initialMeta: PostMeta = {
+    ...DEFAULT_META,
+    type: opts.type ?? (opts.images.length >= 2 ? "carousel" : "single"),
+  };
+  if (opts.auto_publish !== undefined) initialMeta.auto_publish = opts.auto_publish;
+  if (opts.account_id) initialMeta.account_id = opts.account_id;
+
   await Promise.all([
     writeCaption(slug, "ig", ""),
     writeCaption(slug, "li", ""),
-    writeMeta(slug, { ...DEFAULT_META }),
+    writeMeta(slug, initialMeta),
   ]);
   return slug;
 }

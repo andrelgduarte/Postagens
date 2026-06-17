@@ -3,57 +3,139 @@
 import { useState, useTransition } from "react";
 import {
   publishInstagramAction,
+  saveAccount,
+  saveAutoPublish,
   saveCaption,
   saveSchedule,
+  saveType,
   updateStatus,
 } from "@/app/actions";
-import type { NetworkStatus, PostMeta } from "@/lib/posts";
+import type { NetworkStatus, PostMeta, PostType } from "@/lib/posts";
 
 const STATUS_LABELS: Record<NetworkStatus, string> = {
   queued: "Na fila",
   posted: "Publicado",
   skipped: "Pulado",
+  failed: "Falhou",
 };
 
-const STATUS_OPTIONS: NetworkStatus[] = ["queued", "posted", "skipped"];
+const STATUS_OPTIONS: NetworkStatus[] = ["queued", "posted", "skipped", "failed"];
+
+const TYPE_LABELS: Record<PostType, string> = {
+  single: "Imagem única",
+  carousel: "Carrossel",
+  reel: "Reel (vídeo)",
+  story: "Story",
+};
+
+const TYPE_OPTIONS: PostType[] = ["single", "carousel", "reel", "story"];
 
 const IG_COMPOSER = "https://www.instagram.com/";
 const LI_COMPOSER = "https://www.linkedin.com/feed/?shareActive=true";
 
+type AccountOption = { id: string; name: string; is_default: boolean };
+
 export function PostEditor({
   slug,
+  accounts,
   initial,
 }: {
   slug: string;
+  accounts: AccountOption[];
   initial: { captionIg: string; captionLi: string; meta: PostMeta };
 }) {
   const [scheduled, setScheduled] = useState(initial.meta.scheduled ?? "");
+  const [type, setType] = useState<PostType>(initial.meta.type ?? "single");
+  const [autoPublish, setAutoPublish] = useState<boolean>(
+    initial.meta.auto_publish ?? false
+  );
+  const [accountId, setAccountId] = useState<string>(initial.meta.account_id ?? "");
   const [pending, startTransition] = useTransition();
+
+  const defaultAccountName =
+    accounts.find((a) => a.is_default)?.name ?? accounts[0]?.name ?? "";
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-neutral-500">Agendar para</span>
           <input
             type="datetime-local"
             value={scheduled.slice(0, 16)}
-            onChange={(e) => setScheduled(e.target.value)}
+            disabled={pending}
+            onChange={(e) => {
+              const v = e.target.value;
+              setScheduled(v);
+              startTransition(async () => {
+                await saveSchedule(slug, v);
+              });
+            }}
             className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
           />
         </label>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              await saveSchedule(slug, scheduled);
-            })
-          }
-          className="rounded-md bg-neutral-900 text-white text-sm px-3 py-1.5 hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-        >
-          Salvar horário
-        </button>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-neutral-500">Tipo</span>
+          <select
+            value={type}
+            disabled={pending}
+            onChange={(e) => {
+              const next = e.target.value as PostType;
+              setType(next);
+              startTransition(async () => {
+                await saveType(slug, next);
+              });
+            }}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
+          >
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-neutral-500">Conta IG</span>
+          <select
+            value={accountId}
+            disabled={pending || accounts.length === 0}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAccountId(v);
+              startTransition(async () => {
+                await saveAccount(slug, v);
+              });
+            }}
+            className="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
+          >
+            <option value="">
+              {accounts.length === 0
+                ? "Configure em /settings"
+                : `Padrão${defaultAccountName ? ` (${defaultAccountName})` : ""}`}
+            </option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-1 lg:self-end lg:pb-1.5">
+          <input
+            type="checkbox"
+            checked={autoPublish}
+            disabled={pending}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setAutoPublish(v);
+              startTransition(async () => {
+                await saveAutoPublish(slug, v);
+              });
+            }}
+          />
+          <span>Publicar sozinho no horário</span>
+        </label>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

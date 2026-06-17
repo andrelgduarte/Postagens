@@ -1,0 +1,16 @@
+{
+  "snapshots": [
+    {
+      "at": "2026-06-15T09:05:00.000Z",
+      "age_hours": 24.1,
+      "milestone": "24h",
+      "metrics": { "reach": 1840, "likes": 142, "comments": 18, "shares": 6, "saved": 24 }
+    },
+    {
+      "at": "2026-06-17T09:10:00.000Z",
+      "age_hours": 72.2,
+      "milestone": "3d",
+      "metrics": { "reach": 2310, "likes": 178, "comments": 22, "shares": 11, "saved": 31 }
+    }
+  ]
+}

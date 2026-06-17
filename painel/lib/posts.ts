@@ -11,6 +11,7 @@ import {
 } from "./db/schema";
 import { currentUserId } from "./auth";
 import { blobEnabled, uploadMediaBlob } from "./blob";
+import { utcToZonedISO, zonedISOToUtc } from "./tz";
 
 export const POSTS_DIR = path.resolve(process.cwd(), "..", "posts");
 
@@ -61,14 +62,12 @@ function toLocalSchedule(s: string | null | undefined): string | undefined {
   if (!s) return undefined;
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return undefined;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return utcToZonedISO(d);
 }
 
 function parseScheduledForDb(s: string | undefined): Date | null {
   if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return zonedISOToUtc(s);
 }
 
 function parseTimestamp(s: string | undefined): Date | null {

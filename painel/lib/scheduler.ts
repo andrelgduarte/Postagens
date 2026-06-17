@@ -13,6 +13,7 @@ import { getUserEmail } from "./auth";
 import { resendEnabled, sendEmail } from "./email";
 import { maintainTokens } from "./token-maintenance";
 import { listUsersWithActivity } from "./users";
+import { getMinutesInTZ, zonedISOToUtc } from "./tz";
 
 export type TickOptions = {
   now?: Date;
@@ -34,7 +35,7 @@ function toMinutes(hhmm: string): number {
 }
 
 export function isInWindow(now: Date, config: Config): boolean {
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  const minutes = getMinutesInTZ(now);
   const start = toMinutes(config.scheduler.window_start);
   const end = toMinutes(config.scheduler.window_end);
   if (start <= end) return minutes >= start && minutes <= end;
@@ -42,13 +43,7 @@ export function isInWindow(now: Date, config: Config): boolean {
 }
 
 function parseScheduled(scheduled: string): Date | null {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(scheduled)) {
-    return new Date(`${scheduled}T00:00:00`);
-  }
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(scheduled)) {
-    return new Date(scheduled);
-  }
-  return null;
+  return zonedISOToUtc(scheduled);
 }
 
 function readyForRetry(meta: PostMeta, now: Date, retryDelayMin: number): boolean {

@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/scheduler/tick",
-      "schedule": "0 12 * * *"
+      "schedule": "30 13 * * *"
     }
   ]
 }

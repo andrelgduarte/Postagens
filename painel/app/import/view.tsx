@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
+import { useUser } from "@clerk/nextjs";
 import YAML from "yaml";
 
 const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
@@ -90,6 +91,7 @@ export function ImportView() {
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [running, setRunning] = useState(false);
   const [folderLabel, setFolderLabel] = useState<string>("");
+  const { user } = useUser();
 
   function onSelectFolder(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -134,11 +136,16 @@ export function ImportView() {
       contentType: string;
     }[] = [];
 
+    if (!user?.id) {
+      return { state: "error", error: "usuário não carregado" };
+    }
+    const userId = user.id;
+
     for (const [idx, m] of post.mediaFiles.entries()) {
       const ext = m.file.name.split(".").pop() ?? "bin";
       const filename = `${String(idx + 1).padStart(2, "0")}.${ext}`;
       try {
-        const blob = await upload(`${slug}/${filename}`, m.file, {
+        const blob = await upload(`media/${userId}/${slug}/${filename}`, m.file, {
           access: "public",
           handleUploadUrl: "/api/blob/upload-token",
           contentType: m.file.type || undefined,

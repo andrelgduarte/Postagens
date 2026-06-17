@@ -1,0 +1,44 @@
+name: Backup Neon
+
+on:
+  schedule:
+    # Toda segunda-feira às 06:00 UTC (03:00 BRT)
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  pgdump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_BACKUP }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL_BACKUP secret ausente" >&2
+            exit 1
+          fi
+          STAMP=$(date -u +%Y-%m-%d)
+          mkdir -p out
+          pg_dump --no-owner --no-privileges --format=custom \
+            --file="out/painel_postagens-${STAMP}.dump" \
+            "$DATABASE_URL"
+          ls -lh out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-backup
+          path: out/
+          retention-days: 30
+          if-no-files-found: error

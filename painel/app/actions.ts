@@ -91,11 +91,12 @@ export async function bulkSetAccount(
   slugs: string[],
   account_id: string
 ): Promise<{ updated: number }> {
+  const resolved = account_id === "__default__" ? undefined : account_id || undefined;
   let updated = 0;
   for (const slug of slugs) {
     const post = await getPost(slug);
     if (!post) continue;
-    await writeMeta(slug, { ...post.meta, account_id: account_id || undefined });
+    await writeMeta(slug, { ...post.meta, account_id: resolved });
     updated += 1;
   }
   revalidatePath("/");

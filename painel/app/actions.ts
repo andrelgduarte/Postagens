@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   createPost,
+  deletePostBySlug,
   getPost,
   type NetworkStatus,
   type PostType,
@@ -69,6 +70,49 @@ export async function saveAutoPublish(slug: string, auto_publish: boolean) {
   if (!post) throw new Error("Post não encontrado");
   await writeMeta(slug, { ...post.meta, auto_publish });
   revalidatePath(`/post/${slug}`);
+}
+
+export async function bulkSetAutoPublish(
+  slugs: string[],
+  auto_publish: boolean
+): Promise<{ updated: number }> {
+  let updated = 0;
+  for (const slug of slugs) {
+    const post = await getPost(slug);
+    if (!post) continue;
+    await writeMeta(slug, { ...post.meta, auto_publish });
+    updated += 1;
+  }
+  revalidatePath("/");
+  return { updated };
+}
+
+export async function bulkSetAccount(
+  slugs: string[],
+  account_id: string
+): Promise<{ updated: number }> {
+  const resolved = account_id === "__default__" ? undefined : account_id || undefined;
+  let updated = 0;
+  for (const slug of slugs) {
+    const post = await getPost(slug);
+    if (!post) continue;
+    await writeMeta(slug, { ...post.meta, account_id: resolved });
+    updated += 1;
+  }
+  revalidatePath("/");
+  return { updated };
+}
+
+export async function bulkDelete(slugs: string[]): Promise<{ deleted: number }> {
+  let deleted = 0;
+  for (const slug of slugs) {
+    const ok = await deletePostBySlug(slug);
+    if (ok) deleted += 1;
+  }
+  revalidatePath("/");
+  revalidatePath("/calendar");
+  revalidatePath("/analytics");
+  return { deleted };
 }
 
 export async function saveAccount(slug: string, account_id: string) {

@@ -497,6 +497,32 @@ export function imageUrl(slug: string, filename: string): string {
   return `/api/img/${encodeURIComponent(slug)}/${encodeURIComponent(filename)}`;
 }
 
+export async function deletePostBySlug(slug: string, userId?: string): Promise<boolean> {
+  const uid = await resolveUserId(userId);
+  const rows = await db
+    .select({ id: postsTable.id })
+    .from(postsTable)
+    .where(and(eq(postsTable.userId, uid), eq(postsTable.slug, slug)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return false;
+
+  // best-effort blob cleanup
+  const mediaRows = await db
+    .select({ blobUrl: mediaTable.blobUrl })
+    .from(mediaTable)
+    .where(eq(mediaTable.postId, row.id));
+  const { deleteMediaBlob } = await import("./blob");
+  await Promise.allSettled(
+    mediaRows
+      .filter((m): m is { blobUrl: string } => Boolean(m.blobUrl))
+      .map((m) => deleteMediaBlob(m.blobUrl))
+  );
+
+  await db.delete(postsTable).where(eq(postsTable.id, row.id));
+  return true;
+}
+
 export async function getPostId(slug: string, userId?: string): Promise<string | null> {
   const uid = await resolveUserId(userId);
   const rows = await db

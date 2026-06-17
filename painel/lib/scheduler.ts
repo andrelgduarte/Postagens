@@ -14,6 +14,7 @@ import { resendEnabled, sendEmail } from "./email";
 import { maintainTokens } from "./token-maintenance";
 import { listUsersWithActivity } from "./users";
 import { getMinutesInTZ, zonedISOToUtc } from "./tz";
+import { buildPayload, publishLinkedInWebhook } from "./linkedin-webhook";
 
 export type TickOptions = {
   now?: Date;
@@ -85,6 +86,25 @@ export async function findDuePostsForUser(
       continue;
     }
     out.push({ slug: p.slug });
+  }
+  return out;
+}
+
+export async function findDueLIPostsForUser(
+  now: Date,
+  userId: string
+): Promise<string[]> {
+  const posts = await listPosts(userId);
+  const out: string[] = [];
+  for (const p of posts) {
+    const m = p.meta;
+    if (!m.auto_publish) continue;
+    if (m.status_li !== "queued") continue;
+    if (!m.scheduled) continue;
+    const when = parseScheduled(m.scheduled);
+    if (!when) continue;
+    if (when.getTime() > now.getTime()) continue;
+    out.push(p.slug);
   }
   return out;
 }
@@ -184,6 +204,67 @@ async function notifyByEmail(
   }
 }
 
+async function runLIPass(
+  userId: string,
+  config: Config,
+  now: Date,
+  opts: TickOptions,
+  result: TickResult
+): Promise<void> {
+  const webhookUrl = config.linkedin?.webhook_url?.trim();
+  if (!webhookUrl) return;
+
+  const slugs = await findDueLIPostsForUser(now, userId);
+  for (const slug of slugs) {
+    const post = await getPostBySlugGlobal(slug);
+    if (!post) continue;
+    if (!post.captionLi.trim()) {
+      await logEvent({ event: "skip", slug, message: "LI: caption vazia" });
+      continue;
+    }
+    await logEvent({ event: "publish_start", slug, message: "LI webhook" });
+
+    if (opts.dryRun) {
+      result.published.push(`${slug} (LI dry-run)`);
+      continue;
+    }
+
+    const payload = buildPayload(post);
+    const r = await publishLinkedInWebhook({ webhookUrl, payload });
+    if (r.ok) {
+      await writeMetaGlobal(slug, {
+        ...post.meta,
+        status_li: "posted",
+      });
+      result.published.push(`${slug} (LI)`);
+      await logEvent({ event: "publish_ok", slug, message: `LI webhook ${r.status}` });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✓ Postado no LinkedIn: ${post.title}`,
+          text:
+            `Webhook do LinkedIn aceitou o post.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\n`,
+        });
+      }
+    } else {
+      result.failed.push({ slug, reason: r.error });
+      await logEvent({
+        event: "publish_fail",
+        slug,
+        message: `LI webhook: ${r.error}`,
+      });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✗ Falha LinkedIn: ${post.title}`,
+          text:
+            `Webhook do LinkedIn falhou.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nErro: ${r.error}\n`,
+        });
+      }
+    }
+  }
+}
+
 async function runUserPass(
   userId: string,
   now: Date,
@@ -259,6 +340,9 @@ async function runUserPass(
       }
     }
   }
+
+  // LinkedIn webhook pass (independente do IG)
+  await runLIPass(userId, config, now, opts, result);
 }
 
 export async function runTick(opts: TickOptions = {}): Promise<TickResult> {

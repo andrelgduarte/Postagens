@@ -5,6 +5,7 @@ import type { Account, Config, PostType } from "@/lib/config";
 import {
   deleteAccount,
   saveDefaults,
+  saveLinkedIn,
   saveNotifications,
   saveScheduler,
   saveStaging,
@@ -32,6 +33,7 @@ export function SettingsView({
       <DefaultsSection defaults={config.defaults} />
       <SchedulerSection scheduler={config.scheduler} />
       <NotificationsSection notifications={config.notifications} />
+      <LinkedInSection linkedin={config.linkedin} />
       <StagingSection staging_dir={config.staging_dir} />
     </div>
   );
@@ -563,6 +565,45 @@ function NotificationsSection({
           className="text-sm rounded-md bg-neutral-900 text-white px-3 py-1.5 hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900"
         >
           {saved ? "Salvo ✓" : pending ? "Salvando…" : "Salvar notificações"}
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+function LinkedInSection({ linkedin }: { linkedin: Config["linkedin"] }) {
+  const [form, setForm] = useState(linkedin);
+  const [pending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  function save() {
+    startTransition(async () => {
+      await saveLinkedIn(form);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    });
+  }
+
+  return (
+    <Section
+      title="LinkedIn (via webhook)"
+      description="Quando preenchido, posts com status_li=queued e auto_publish=true são enviados pra esse webhook (Make.com, Zapier, n8n). O payload é JSON com slug, caption, e URLs das mídias."
+    >
+      <Field
+        label="Webhook URL"
+        value={form.webhook_url}
+        onChange={(v) => setForm({ webhook_url: v })}
+        placeholder="https://hook.us2.make.com/..."
+        mono
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="text-sm rounded-md bg-neutral-900 text-white px-3 py-1.5 hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+        >
+          {saved ? "Salvo ✓" : pending ? "Salvando…" : "Salvar"}
         </button>
       </div>
     </Section>

@@ -131,6 +131,17 @@ export const insights = pgTable(
   ]
 );
 
+export const eventLog = pgTable("event_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+  event: text("event").notNull(),
+  slug: text("slug"),
+  message: text("message"),
+  account: text("account"),
+  postId: text("post_id"),
+  attempt: integer("attempt"),
+});
+
 export const appConfig = pgTable(
   "app_config",
   {

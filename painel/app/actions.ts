@@ -10,6 +10,21 @@ import {
   writeMeta,
 } from "@/lib/posts";
 
+export async function resetRetry(slug: string) {
+  const post = await getPost(slug);
+  if (!post) throw new Error("Post não encontrado");
+  const meta = {
+    ...post.meta,
+    status_ig: "queued" as NetworkStatus,
+    attempts: 0,
+    last_attempt: undefined,
+    last_error: undefined,
+  };
+  await writeMeta(slug, meta);
+  revalidatePath("/");
+  revalidatePath(`/post/${slug}`);
+}
+
 export async function updateStatus(
   slug: string,
   network: "ig" | "li",

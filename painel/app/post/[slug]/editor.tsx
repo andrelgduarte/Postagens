@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   publishInstagramAction,
+  resetRetry,
   saveAccount,
   saveAutoPublish,
   saveCaption,
@@ -138,6 +139,8 @@ export function PostEditor({
         </label>
       </div>
 
+      <StatusDetail slug={slug} meta={initial.meta} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <NetworkPanel
           slug={slug}
@@ -157,6 +160,80 @@ export function PostEditor({
           composerUrl={LI_COMPOSER}
         />
       </div>
+    </div>
+  );
+}
+
+function StatusDetail({ slug, meta }: { slug: string; meta: PostMeta }) {
+  const [pending, startTransition] = useTransition();
+  const hasInfo =
+    meta.attempts !== undefined ||
+    meta.last_attempt ||
+    meta.last_error ||
+    meta.published_at ||
+    meta.ig_post_id;
+  if (!hasInfo) return null;
+
+  const failed = meta.status_ig === "failed";
+
+  return (
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          Status técnico (Instagram)
+        </h3>
+        {failed && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (!confirm("Reabrir esse post para nova tentativa?")) return;
+              startTransition(async () => {
+                await resetRetry(slug);
+              });
+            }}
+            className="rounded-md bg-amber-600 text-white text-xs px-3 py-1 hover:bg-amber-700 disabled:opacity-50"
+          >
+            {pending ? "Resetando…" : "Tentar novamente"}
+          </button>
+        )}
+      </div>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        {meta.published_at && (
+          <Row label="Publicado em">
+            <span className="font-mono">{new Date(meta.published_at).toLocaleString("pt-BR")}</span>
+          </Row>
+        )}
+        {meta.ig_post_id && (
+          <Row label="IG post ID">
+            <span className="font-mono">{meta.ig_post_id}</span>
+          </Row>
+        )}
+        {meta.attempts !== undefined && meta.attempts > 0 && (
+          <Row label="Tentativas">
+            <span>{meta.attempts}</span>
+          </Row>
+        )}
+        {meta.last_attempt && (
+          <Row label="Última tentativa">
+            <span className="font-mono">{new Date(meta.last_attempt).toLocaleString("pt-BR")}</span>
+          </Row>
+        )}
+        {meta.last_error && (
+          <Row label="Último erro" wide>
+            <span className="text-red-700 dark:text-red-400 break-words">{meta.last_error}</span>
+          </Row>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function Row({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={wide ? "sm:col-span-2 flex flex-col gap-0.5" : "flex flex-col gap-0.5"}>
+      <dt className="text-neutral-500">{label}</dt>
+      <dd>{children}</dd>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { loadConfig, type Config } from "./config";
 import {
   getPostBySlugGlobal,
-  listAllPosts,
+  listPosts,
   writeMetaGlobal,
   type PostMeta,
 } from "./posts";
@@ -9,9 +9,10 @@ import { publishInstagram } from "./instagram";
 import { logEvent } from "./publish-log";
 import { showToast } from "./notify";
 import { collectInsightsTick } from "./insights";
-import { getUserEmail, workerUserId } from "./auth";
+import { getUserEmail } from "./auth";
 import { resendEnabled, sendEmail } from "./email";
 import { maintainTokens } from "./token-maintenance";
+import { listUsersWithActivity } from "./users";
 
 export type TickOptions = {
   now?: Date;
@@ -41,7 +42,6 @@ export function isInWindow(now: Date, config: Config): boolean {
 }
 
 function parseScheduled(scheduled: string): Date | null {
-  // Treat as local time. Accept "YYYY-MM-DDTHH:MM" or "YYYY-MM-DD".
   if (/^\d{4}-\d{2}-\d{2}$/.test(scheduled)) {
     return new Date(`${scheduled}T00:00:00`);
   }
@@ -62,8 +62,12 @@ export type DueCandidate = {
   reason?: string;
 };
 
-export async function findDuePosts(now: Date, config: Config): Promise<DueCandidate[]> {
-  const posts = await listAllPosts();
+export async function findDuePostsForUser(
+  now: Date,
+  config: Config,
+  userId: string
+): Promise<DueCandidate[]> {
+  const posts = await listPosts(userId);
   const out: DueCandidate[] = [];
   for (const p of posts) {
     const m = p.meta;
@@ -185,50 +189,32 @@ async function notifyByEmail(
   }
 }
 
-export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
-  const now = opts.now ?? new Date();
-  const config = await loadConfig(workerUserId());
-  const result: TickResult = {
-    considered: 0,
-    published: [],
-    skipped: [],
-    failed: [],
-    insights: [],
-  };
-
-  await logEvent({
-    event: "tick_start",
-    message: opts.dryRun ? "dry-run" : "live",
-  });
+async function runUserPass(
+  userId: string,
+  now: Date,
+  opts: TickOptions,
+  result: TickResult
+): Promise<void> {
+  const config = await loadConfig(userId);
 
   if (!config.scheduler.enabled && !opts.dryRun) {
-    await logEvent({ event: "skip", message: "scheduler desabilitado em /settings" });
-    await logEvent({ event: "tick_end" });
-    return result;
+    await logEvent({
+      event: "skip",
+      message: `${userId}: scheduler desabilitado`,
+    });
+    return;
   }
 
   if (!isInWindow(now, config)) {
     await logEvent({
       event: "skip",
-      message: `fora da janela ${config.scheduler.window_start}-${config.scheduler.window_end}`,
+      message: `${userId}: fora da janela ${config.scheduler.window_start}-${config.scheduler.window_end}`,
     });
-    await logEvent({ event: "tick_end" });
-    return result;
+    return;
   }
 
-  if (!opts.dryRun) {
-    try {
-      await maintainTokens(now);
-    } catch (e) {
-      await logEvent({
-        event: "publish_fail",
-        message: `token maintenance: ${e instanceof Error ? e.message : String(e)}`,
-      });
-    }
-  }
-
-  const candidates = await findDuePosts(now, config);
-  result.considered = candidates.length;
+  const candidates = await findDuePostsForUser(now, config, userId);
+  result.considered += candidates.length;
 
   for (const c of candidates) {
     if (c.reason) {
@@ -278,7 +264,49 @@ export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
       }
     }
   }
+}
 
+export async function runTick(opts: TickOptions = {}): Promise<TickResult> {
+  const now = opts.now ?? new Date();
+  const result: TickResult = {
+    considered: 0,
+    published: [],
+    skipped: [],
+    failed: [],
+    insights: [],
+  };
+
+  await logEvent({
+    event: "tick_start",
+    message: opts.dryRun ? "dry-run" : "live",
+  });
+
+  // Manutenção de tokens é global (cobre todas as contas com credenciais)
+  if (!opts.dryRun) {
+    try {
+      await maintainTokens(now);
+    } catch (e) {
+      await logEvent({
+        event: "publish_fail",
+        message: `token maintenance: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
+  // Itera por usuário — cada um respeita sua própria config
+  const userIds = await listUsersWithActivity();
+  for (const userId of userIds) {
+    try {
+      await runUserPass(userId, now, opts, result);
+    } catch (e) {
+      await logEvent({
+        event: "publish_fail",
+        message: `${userId}: tick pass failed: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
+  // Insights também são globais
   if (!opts.dryRun) {
     try {
       const collected = await collectInsightsTick(now);

@@ -9,6 +9,7 @@ const isPublic = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/scheduler(.*)",
+  "/api/admin(.*)",
 ]);
 
 export default clerkEnabled
@@ -23,7 +24,7 @@ export default clerkEnabled
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/img|api/scheduler).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/img|api/scheduler|api/admin).*)",
     "/",
   ],
 };

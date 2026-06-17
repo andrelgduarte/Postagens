@@ -10,6 +10,7 @@ import {
   saveScheduler,
   saveStaging,
   setDefaultAccount,
+  testLinkedInWebhook,
   upsertAccount,
 } from "./actions";
 
@@ -575,12 +576,21 @@ function LinkedInSection({ linkedin }: { linkedin: Config["linkedin"] }) {
   const [form, setForm] = useState(linkedin);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; status?: number; error?: string } | null>(null);
 
   function save() {
     startTransition(async () => {
       await saveLinkedIn(form);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+    });
+  }
+
+  function runTest() {
+    setTestResult(null);
+    startTransition(async () => {
+      const result = await testLinkedInWebhook();
+      setTestResult(result);
     });
   }
 
@@ -596,7 +606,15 @@ function LinkedInSection({ linkedin }: { linkedin: Config["linkedin"] }) {
         placeholder="https://hook.us2.make.com/..."
         mono
       />
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={pending || !form.webhook_url.trim()}
+          className="text-sm rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
+        >
+          {pending ? "Enviando…" : "Enviar payload de teste"}
+        </button>
         <button
           type="button"
           onClick={save}
@@ -606,6 +624,23 @@ function LinkedInSection({ linkedin }: { linkedin: Config["linkedin"] }) {
           {saved ? "Salvo ✓" : pending ? "Salvando…" : "Salvar"}
         </button>
       </div>
+      {testResult && (
+        <div
+          className={`text-xs rounded-md px-3 py-2 ${
+            testResult.ok
+              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900"
+              : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900"
+          }`}
+        >
+          {testResult.ok
+            ? `✓ Webhook respondeu ${testResult.status ?? "OK"}. Cheque o Make — o payload chegou lá.`
+            : `✗ ${testResult.error ?? "erro desconhecido"}`}
+        </div>
+      )}
+      <p className="text-xs text-neutral-500">
+        O teste envia um payload completo (3 imagens placeholder + caption + slug fake) pro webhook.
+        Não toca no DB e não posta no LinkedIn — só estimula o Make a aprender a estrutura do JSON.
+      </p>
     </Section>
   );
 }

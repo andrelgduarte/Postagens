@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPost, imageUrl } from "@/lib/posts";
+import { getPost, imageUrl, listPosts } from "@/lib/posts";
 import { listAccounts } from "@/lib/config";
 import { PostEditor } from "./editor";
 
@@ -12,15 +12,56 @@ export default async function PostPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [post, accounts] = await Promise.all([getPost(slug), listAccounts()]);
+  const [post, accounts, allPosts] = await Promise.all([
+    getPost(slug),
+    listAccounts(),
+    listPosts(),
+  ]);
   if (!post) notFound();
+
+  const sorted = allPosts.slice().sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.slug.localeCompare(b.slug);
+  });
+  const idx = sorted.findIndex((p) => p.slug === slug);
+  const prev = idx > 0 ? sorted[idx - 1] : null;
+  const next = idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : null;
 
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
-          ← voltar
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          >
+            ← voltar
+          </Link>
+          <div className="flex items-center gap-4 text-sm">
+            {prev ? (
+              <Link
+                href={`/post/${prev.slug}`}
+                className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                title={`${prev.date} · ${prev.title}`}
+              >
+                ← anterior
+              </Link>
+            ) : (
+              <span className="text-neutral-300 dark:text-neutral-600">← anterior</span>
+            )}
+            {next ? (
+              <Link
+                href={`/post/${next.slug}`}
+                className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                title={`${next.date} · ${next.title}`}
+              >
+                próximo →
+              </Link>
+            ) : (
+              <span className="text-neutral-300 dark:text-neutral-600">próximo →</span>
+            )}
+          </div>
+        </div>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{post.title}</h1>
         <p className="text-sm font-mono text-neutral-500">
           {post.slug} · {post.images.length} {post.images.length === 1 ? "imagem" : "imagens"}

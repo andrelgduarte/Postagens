@@ -14,7 +14,7 @@ import { resendEnabled, sendEmail } from "./email";
 import { maintainTokens } from "./token-maintenance";
 import { listUsersWithActivity } from "./users";
 import { getMinutesInTZ, zonedISOToUtc } from "./tz";
-import { buildPayload, publishLinkedInWebhook } from "./linkedin-webhook";
+import { publishLinkedInPost } from "./linkedin-publish";
 
 export type TickOptions = {
   now?: Date;
@@ -206,14 +206,11 @@ async function notifyByEmail(
 
 async function runLIPass(
   userId: string,
-  config: Config,
+  _config: Config,
   now: Date,
   opts: TickOptions,
   result: TickResult
 ): Promise<void> {
-  const webhookUrl = config.linkedin?.webhook_url?.trim();
-  if (!webhookUrl) return;
-
   const slugs = await findDueLIPostsForUser(now, userId);
   for (const slug of slugs) {
     const post = await getPostBySlugGlobal(slug);
@@ -222,42 +219,34 @@ async function runLIPass(
       await logEvent({ event: "skip", slug, message: "LI: caption vazia" });
       continue;
     }
-    await logEvent({ event: "publish_start", slug, message: "LI webhook" });
+    await logEvent({ event: "publish_start", slug, message: "LI API" });
 
     if (opts.dryRun) {
       result.published.push(`${slug} (LI dry-run)`);
       continue;
     }
 
-    const payload = buildPayload(post);
-    const r = await publishLinkedInWebhook({ webhookUrl, payload });
+    const r = await publishLinkedInPost({ userId, post });
     if (r.ok) {
-      await writeMetaGlobal(slug, {
-        ...post.meta,
-        status_li: "posted",
-      });
+      await writeMetaGlobal(slug, { ...post.meta, status_li: "posted" });
       result.published.push(`${slug} (LI)`);
-      await logEvent({ event: "publish_ok", slug, message: `LI webhook ${r.status}` });
+      await logEvent({ event: "publish_ok", slug, message: `LI API ${r.postUrn || "ok"}` });
       if (post.userId) {
         await notifyByEmail(post.userId, {
           subject: `✓ Postado no LinkedIn: ${post.title}`,
           text:
-            `Webhook do LinkedIn aceitou o post.\n\n` +
-            `Slug: ${slug}\nTítulo: ${post.title}\n`,
+            `LinkedIn aceitou o post.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nURN: ${r.postUrn}\n`,
         });
       }
     } else {
       result.failed.push({ slug, reason: r.error });
-      await logEvent({
-        event: "publish_fail",
-        slug,
-        message: `LI webhook: ${r.error}`,
-      });
+      await logEvent({ event: "publish_fail", slug, message: `LI API: ${r.error}` });
       if (post.userId) {
         await notifyByEmail(post.userId, {
           subject: `✗ Falha LinkedIn: ${post.title}`,
           text:
-            `Webhook do LinkedIn falhou.\n\n` +
+            `Publicação no LinkedIn falhou.\n\n` +
             `Slug: ${slug}\nTítulo: ${post.title}\nErro: ${r.error}\n`,
         });
       }

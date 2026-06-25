@@ -35,6 +35,24 @@ export const accounts = pgTable(
   (t) => [unique("accounts_user_external_uq").on(t.userId, t.externalId)]
 );
 
+export const linkedinAccounts = pgTable(
+  "linkedin_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull().default("default-user"),
+    personUrn: text("person_urn").notNull(),
+    name: text("name").notNull(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("linkedin_accounts_user_urn_uq").on(t.userId, t.personUrn)]
+);
+
 export const posts = pgTable(
   "posts",
   {
@@ -163,3 +181,5 @@ export type MediaInsert = typeof media.$inferInsert;
 export type Insight = typeof insights.$inferSelect;
 export type InsightInsert = typeof insights.$inferInsert;
 export type AppConfigRow = typeof appConfig.$inferSelect;
+export type LinkedinAccount = typeof linkedinAccounts.$inferSelect;
+export type LinkedinAccountInsert = typeof linkedinAccounts.$inferInsert;

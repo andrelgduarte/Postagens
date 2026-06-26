@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   publishInstagramAction,
+  publishLinkedInAction,
   resetRetry,
   saveAccount,
   saveAutoPublish,
@@ -269,9 +270,13 @@ function NetworkPanel({
     setPublishError(null);
     setPublishing(true);
     try {
-      if (dirty) await saveCaption(slug, "ig", caption);
-      const { postId } = await publishInstagramAction(slug);
-      setPublishedId(postId);
+      if (dirty) await saveCaption(slug, network, caption);
+      if (network === "ig") {
+        const { postId } = await publishInstagramAction(slug);
+        setPublishedId(postId);
+      } else {
+        await publishLinkedInAction(slug);
+      }
       setStatus("posted");
     } catch (e) {
       setPublishError(e instanceof Error ? e.message : String(e));
@@ -362,18 +367,28 @@ function NetworkPanel({
         )}
       </div>
 
-      {network === "ig" && status !== "posted" && (
+      {status !== "posted" && (
         <div className="rounded-md bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-800 p-3 space-y-2">
           <p className="text-xs text-neutral-500">
-            Publicação automática via Graph API (upload no Blob → IG)
+            {network === "ig"
+              ? "Publicação automática via Graph API (upload no Blob → IG)"
+              : "Publicação automática via LinkedIn API (perfil pessoal)"}
           </p>
           <button
             type="button"
             disabled={publishing || pending}
             onClick={handleAutoPublish}
-            className="w-full rounded-md bg-pink-600 text-white text-sm font-medium px-3 py-2 hover:bg-pink-700 disabled:opacity-50"
+            className={`w-full rounded-md text-white text-sm font-medium px-3 py-2 disabled:opacity-50 ${
+              network === "ig"
+                ? "bg-pink-600 hover:bg-pink-700"
+                : "bg-sky-700 hover:bg-sky-800"
+            }`}
           >
-            {publishing ? "Publicando…" : "🚀 Publicar no Instagram"}
+            {publishing
+              ? "Publicando…"
+              : network === "ig"
+                ? "🚀 Publicar no Instagram"
+                : "🚀 Publicar no LinkedIn"}
           </button>
           {publishError && (
             <p className="text-xs text-red-600 dark:text-red-400 break-words">{publishError}</p>

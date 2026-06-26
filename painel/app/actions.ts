@@ -125,6 +125,28 @@ export async function saveAccount(slug: string, account_id: string) {
   revalidatePath(`/post/${slug}`);
 }
 
+export async function publishLinkedInAction(
+  slug: string
+): Promise<{ postUrn: string }> {
+  const post = await getPost(slug);
+  if (!post) throw new Error("Post não encontrado");
+  if (post.meta.status_li === "posted") throw new Error("Já publicado no LinkedIn");
+  if (!post.captionLi.trim()) throw new Error("Legenda do LinkedIn está vazia");
+
+  const { publishLinkedInPost } = await import("@/lib/linkedin-publish");
+  const r = await publishLinkedInPost({ userId: post.userId, post });
+  if (!r.ok) throw new Error(r.error);
+
+  await writeMeta(slug, {
+    ...post.meta,
+    status_li: "posted",
+    published_at: post.meta.published_at ?? new Date().toISOString(),
+  });
+  revalidatePath("/");
+  revalidatePath(`/post/${slug}`);
+  return { postUrn: r.postUrn };
+}
+
 export async function publishInstagramAction(
   slug: string
 ): Promise<{ postId: string; accountName: string }> {

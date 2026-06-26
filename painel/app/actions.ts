@@ -167,6 +167,7 @@ export async function publishInstagramAction(
     videos: post.videos,
     caption: post.captionIg,
     accountId: post.meta.account_id,
+    userId: post.userId,
   });
 
   await writeMeta(slug, {

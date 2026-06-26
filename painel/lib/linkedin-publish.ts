@@ -9,8 +9,8 @@ import {
   refreshAccessToken,
   uploadImageFromUrl,
 } from "./linkedin-api";
-import { imageUrl } from "./posts";
 import type { PostDetail } from "./posts";
+import { cleanupTempMedia, resolveMediaUrls } from "./media-resolve";
 
 const REFRESH_BEFORE_MS = 7 * 86_400_000; // refresh if token expires in 7 days or less
 
@@ -55,15 +55,9 @@ async function ensureFreshToken(accountId: string, accessToken: string, expiresA
   return refreshed.access_token;
 }
 
-function publicMediaUrl(baseUrl: string | undefined, slug: string, filename: string): string {
-  if (!baseUrl) return imageUrl(slug, filename);
-  return `${baseUrl.replace(/\/$/, "")}${imageUrl(slug, filename)}`;
-}
-
 export async function publishLinkedInPost(opts: {
   userId: string;
   post: PostDetail;
-  baseUrl?: string;
 }): Promise<PublishResult> {
   const account = await getLinkedinAccount(opts.userId);
   if (!account) {
@@ -81,22 +75,31 @@ export async function publishLinkedInPost(opts: {
   const ownerUrn = account.personUrn;
   const images = opts.post.images;
 
-  try {
-    if (images.length === 0) {
+  if (images.length === 0) {
+    try {
       const r = await createTextPost({ token, ownerUrn, commentary });
       return { ok: true, postUrn: r.postUrn };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
+  }
 
-    const urls = images.map((f) => publicMediaUrl(opts.baseUrl, opts.post.slug, f));
+  let resolved;
+  try {
+    resolved = await resolveMediaUrls(opts.post.slug, images, opts.post.userId);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
-    if (images.length === 1) {
-      const imageUrn = await uploadImageFromUrl({ token, ownerUrn, url: urls[0] });
+  try {
+    if (resolved.length === 1) {
+      const imageUrn = await uploadImageFromUrl({ token, ownerUrn, url: resolved[0].url });
       const r = await createImagePost({ token, ownerUrn, commentary, imageUrn });
       return { ok: true, postUrn: r.postUrn };
     }
 
     const imageUrns = await Promise.all(
-      urls.map((url) => uploadImageFromUrl({ token, ownerUrn, url }))
+      resolved.map((r) => uploadImageFromUrl({ token, ownerUrn, url: r.url }))
     );
     const r = await createMultiImagePost({
       token,
@@ -107,5 +110,7 @@ export async function publishLinkedInPost(opts: {
     return { ok: true, postUrn: r.postUrn };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    await cleanupTempMedia(resolved);
   }
 }

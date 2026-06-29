@@ -15,6 +15,7 @@ import { maintainTokens } from "./token-maintenance";
 import { listUsersWithActivity } from "./users";
 import { getMinutesInTZ, zonedISOToUtc } from "./tz";
 import { publishLinkedInPost } from "./linkedin-publish";
+import { publishTikTokPost } from "./tiktok-publish";
 
 export type TickOptions = {
   now?: Date;
@@ -100,6 +101,25 @@ export async function findDueLIPostsForUser(
     const m = p.meta;
     if (!m.auto_publish) continue;
     if (m.status_li !== "queued") continue;
+    if (!m.scheduled) continue;
+    const when = parseScheduled(m.scheduled);
+    if (!when) continue;
+    if (when.getTime() > now.getTime()) continue;
+    out.push(p.slug);
+  }
+  return out;
+}
+
+export async function findDueTTPostsForUser(
+  now: Date,
+  userId: string
+): Promise<string[]> {
+  const posts = await listPosts(userId);
+  const out: string[] = [];
+  for (const p of posts) {
+    const m = p.meta;
+    if (!m.auto_publish) continue;
+    if (m.status_tt !== "queued") continue;
     if (!m.scheduled) continue;
     const when = parseScheduled(m.scheduled);
     if (!when) continue;
@@ -254,6 +274,56 @@ async function runLIPass(
   }
 }
 
+async function runTTPass(
+  userId: string,
+  _config: Config,
+  now: Date,
+  opts: TickOptions,
+  result: TickResult
+): Promise<void> {
+  const slugs = await findDueTTPostsForUser(now, userId);
+  for (const slug of slugs) {
+    const post = await getPostBySlugGlobal(slug);
+    if (!post) continue;
+    if (post.images.length === 0 && post.videos.length === 0) {
+      await logEvent({ event: "skip", slug, message: "TT: sem mídia" });
+      continue;
+    }
+    await logEvent({ event: "publish_start", slug, message: "TT inbox" });
+
+    if (opts.dryRun) {
+      result.published.push(`${slug} (TT dry-run)`);
+      continue;
+    }
+
+    const r = await publishTikTokPost({ userId, post });
+    if (r.ok) {
+      await writeMetaGlobal(slug, { ...post.meta, status_tt: "posted" });
+      result.published.push(`${slug} (TT)`);
+      await logEvent({ event: "publish_ok", slug, message: `TT inbox ${r.publishId}` });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✓ TikTok aceitou: ${post.title}`,
+          text:
+            `Enviado pro inbox do TikTok. Abra o app pra finalizar.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nPublish ID: ${r.publishId}\n`,
+        });
+      }
+    } else {
+      result.failed.push({ slug, reason: r.error });
+      await logEvent({ event: "publish_fail", slug, message: `TT: ${r.error}` });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✗ Falha TikTok: ${post.title}`,
+          text:
+            `Envio pro TikTok falhou.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nErro: ${r.error}\n`,
+        });
+      }
+    }
+  }
+}
+
 async function runUserPass(
   userId: string,
   now: Date,
@@ -332,6 +402,8 @@ async function runUserPass(
 
   // LinkedIn webhook pass (independente do IG)
   await runLIPass(userId, config, now, opts, result);
+  // TikTok inbox pass (independente)
+  await runTTPass(userId, config, now, opts, result);
 }
 
 export async function runTick(opts: TickOptions = {}): Promise<TickResult> {

@@ -77,6 +77,7 @@ export default async function PostPage({
         initial={{
           captionIg: post.captionIg,
           captionLi: post.captionLi,
+          captionTt: post.captionTt,
           meta: post.meta,
         }}
       />

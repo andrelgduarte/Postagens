@@ -24,7 +24,7 @@ export type Config = {
   accounts: Account[];
   defaults: {
     type: PostType;
-    networks: ("ig" | "li")[];
+    networks: ("ig" | "li" | "tt")[];
     auto_publish: boolean;
     time: string;
   };

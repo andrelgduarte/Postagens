@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   publishInstagramAction,
   publishLinkedInAction,
+  publishTikTokAction,
   resetRetry,
   saveAccount,
   saveAutoPublish,
@@ -34,6 +35,7 @@ const TYPE_OPTIONS: PostType[] = ["single", "carousel", "reel", "story"];
 
 const IG_COMPOSER = "https://www.instagram.com/";
 const LI_COMPOSER = "https://www.linkedin.com/feed/?shareActive=true";
+const TT_COMPOSER = "https://www.tiktok.com/upload";
 
 type AccountOption = { id: string; name: string; is_default: boolean };
 
@@ -44,7 +46,7 @@ export function PostEditor({
 }: {
   slug: string;
   accounts: AccountOption[];
-  initial: { captionIg: string; captionLi: string; meta: PostMeta };
+  initial: { captionIg: string; captionLi: string; captionTt: string; meta: PostMeta };
 }) {
   const [scheduled, setScheduled] = useState(initial.meta.scheduled ?? "");
   const [type, setType] = useState<PostType>(initial.meta.type ?? "single");
@@ -160,6 +162,14 @@ export function PostEditor({
           initialStatus={initial.meta.status_li}
           composerUrl={LI_COMPOSER}
         />
+        <NetworkPanel
+          slug={slug}
+          network="tt"
+          label="TikTok"
+          initialCaption={initial.captionTt}
+          initialStatus={initial.meta.status_tt}
+          composerUrl={TT_COMPOSER}
+        />
       </div>
     </div>
   );
@@ -249,7 +259,7 @@ function NetworkPanel({
   igPostId,
 }: {
   slug: string;
-  network: "ig" | "li";
+  network: "ig" | "li" | "tt";
   label: string;
   initialCaption: string;
   initialStatus: NetworkStatus;
@@ -274,8 +284,10 @@ function NetworkPanel({
       if (network === "ig") {
         const { postId } = await publishInstagramAction(slug);
         setPublishedId(postId);
-      } else {
+      } else if (network === "li") {
         await publishLinkedInAction(slug);
+      } else {
+        await publishTikTokAction(slug);
       }
       setStatus("posted");
     } catch (e) {
@@ -372,7 +384,9 @@ function NetworkPanel({
           <p className="text-xs text-neutral-500">
             {network === "ig"
               ? "Publicação automática via Graph API (upload no Blob → IG)"
-              : "Publicação automática via LinkedIn API (perfil pessoal)"}
+              : network === "li"
+                ? "Publicação automática via LinkedIn API (perfil pessoal)"
+                : "Envio pro inbox/drafts do TikTok — abra o app pra finalizar"}
           </p>
           <button
             type="button"
@@ -381,14 +395,18 @@ function NetworkPanel({
             className={`w-full rounded-md text-white text-sm font-medium px-3 py-2 disabled:opacity-50 ${
               network === "ig"
                 ? "bg-pink-600 hover:bg-pink-700"
-                : "bg-sky-700 hover:bg-sky-800"
+                : network === "li"
+                  ? "bg-sky-700 hover:bg-sky-800"
+                  : "bg-neutral-900 hover:bg-neutral-700"
             }`}
           >
             {publishing
               ? "Publicando…"
               : network === "ig"
                 ? "🚀 Publicar no Instagram"
-                : "🚀 Publicar no LinkedIn"}
+                : network === "li"
+                  ? "🚀 Publicar no LinkedIn"
+                  : "🚀 Enviar pro TikTok"}
           </button>
           {publishError && (
             <p className="text-xs text-red-600 dark:text-red-400 break-words">{publishError}</p>

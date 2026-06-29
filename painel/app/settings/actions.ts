@@ -10,6 +10,7 @@ import {
 } from "@/lib/config";
 import { currentUserId } from "@/lib/auth";
 import { deleteLinkedinAccount as dbDeleteLinkedinAccount, getLinkedinAccount } from "@/lib/linkedin-accounts";
+import { deleteTiktokAccount as dbDeleteTiktokAccount, getTiktokAccount } from "@/lib/tiktok-accounts";
 
 export type LinkedinAccountInfo = {
   id: string;
@@ -37,6 +38,37 @@ export async function getLinkedinAccountInfo(): Promise<LinkedinAccountInfo> {
 export async function disconnectLinkedinAccount(id: string): Promise<void> {
   const uid = await currentUserId();
   await dbDeleteLinkedinAccount(uid, id);
+  revalidatePath("/settings");
+}
+
+export type TiktokAccountInfo = {
+  id: string;
+  displayName: string;
+  openId: string;
+  avatarUrl: string | null;
+  tokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  scope: string | null;
+} | null;
+
+export async function getTiktokAccountInfo(): Promise<TiktokAccountInfo> {
+  const uid = await currentUserId();
+  const row = await getTiktokAccount(uid);
+  if (!row) return null;
+  return {
+    id: row.id,
+    displayName: row.displayName,
+    openId: row.openId,
+    avatarUrl: row.avatarUrl,
+    tokenExpiresAt: row.tokenExpiresAt?.toISOString() ?? null,
+    refreshTokenExpiresAt: row.refreshTokenExpiresAt?.toISOString() ?? null,
+    scope: row.scope,
+  };
+}
+
+export async function disconnectTiktokAccount(id: string): Promise<void> {
+  const uid = await currentUserId();
+  await dbDeleteTiktokAccount(uid, id);
   revalidatePath("/settings");
 }
 

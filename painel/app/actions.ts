@@ -28,14 +28,15 @@ export async function resetRetry(slug: string) {
 
 export async function updateStatus(
   slug: string,
-  network: "ig" | "li",
+  network: "ig" | "li" | "tt",
   status: NetworkStatus
 ) {
   const post = await getPost(slug);
   if (!post) throw new Error("Post não encontrado");
   const meta = { ...post.meta };
   if (network === "ig") meta.status_ig = status;
-  else meta.status_li = status;
+  else if (network === "li") meta.status_li = status;
+  else meta.status_tt = status;
   await writeMeta(slug, meta);
   revalidatePath("/");
   revalidatePath(`/post/${slug}`);
@@ -43,7 +44,7 @@ export async function updateStatus(
 
 export async function saveCaption(
   slug: string,
-  network: "ig" | "li",
+  network: "ig" | "li" | "tt",
   content: string
 ) {
   await writeCaption(slug, network, content);
@@ -123,6 +124,30 @@ export async function saveAccount(slug: string, account_id: string) {
     account_id: account_id || undefined,
   });
   revalidatePath(`/post/${slug}`);
+}
+
+export async function publishTikTokAction(
+  slug: string
+): Promise<{ publishId: string }> {
+  const post = await getPost(slug);
+  if (!post) throw new Error("Post não encontrado");
+  if (post.meta.status_tt === "posted") throw new Error("Já enviado pro TikTok");
+  if (post.images.length === 0 && post.videos.length === 0) {
+    throw new Error("TikTok exige vídeo ou pelo menos 1 foto");
+  }
+
+  const { publishTikTokPost } = await import("@/lib/tiktok-publish");
+  const r = await publishTikTokPost({ userId: post.userId, post });
+  if (!r.ok) throw new Error(r.error);
+
+  await writeMeta(slug, {
+    ...post.meta,
+    status_tt: "posted",
+    published_at: post.meta.published_at ?? new Date().toISOString(),
+  });
+  revalidatePath("/");
+  revalidatePath(`/post/${slug}`);
+  return { publishId: r.publishId };
 }
 
 export async function publishLinkedInAction(

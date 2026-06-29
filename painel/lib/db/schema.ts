@@ -53,6 +53,26 @@ export const linkedinAccounts = pgTable(
   (t) => [unique("linkedin_accounts_user_urn_uq").on(t.userId, t.personUrn)]
 );
 
+export const tiktokAccounts = pgTable(
+  "tiktok_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull().default("default-user"),
+    openId: text("open_id").notNull(),
+    unionId: text("union_id"),
+    displayName: text("display_name").notNull(),
+    avatarUrl: text("avatar_url"),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tiktok_accounts_user_open_uq").on(t.userId, t.openId)]
+);
+
 export const posts = pgTable(
   "posts",
   {
@@ -65,6 +85,7 @@ export const posts = pgTable(
     scheduled: timestamp("scheduled", { withTimezone: false }),
     statusIg: text("status_ig").notNull().default("queued"),
     statusLi: text("status_li").notNull().default("queued"),
+    statusTt: text("status_tt").notNull().default("queued"),
     autoPublish: boolean("auto_publish").notNull().default(false),
     accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" }),
     igPostId: text("ig_post_id"),
@@ -86,6 +107,10 @@ export const posts = pgTable(
       "posts_status_li_chk",
       sql`${t.statusLi} IN ('queued','posted','skipped','failed')`
     ),
+    check(
+      "posts_status_tt_chk",
+      sql`${t.statusTt} IN ('queued','posted','skipped','failed')`
+    ),
   ]
 );
 
@@ -101,7 +126,7 @@ export const captions = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.postId, t.network] }),
-    check("captions_network_chk", sql`${t.network} IN ('ig','li')`),
+    check("captions_network_chk", sql`${t.network} IN ('ig','li','tt')`),
   ]
 );
 
@@ -183,3 +208,5 @@ export type InsightInsert = typeof insights.$inferInsert;
 export type AppConfigRow = typeof appConfig.$inferSelect;
 export type LinkedinAccount = typeof linkedinAccounts.$inferSelect;
 export type LinkedinAccountInsert = typeof linkedinAccounts.$inferInsert;
+export type TiktokAccount = typeof tiktokAccounts.$inferSelect;
+export type TiktokAccountInsert = typeof tiktokAccounts.$inferInsert;

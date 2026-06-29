@@ -14,12 +14,17 @@ export async function GET() {
     .filter((p) => {
       if (!p.meta.scheduled) return false;
       if (p.meta.scheduled.slice(0, 16) > localNow) return false;
-      return p.meta.status_ig === "queued" || p.meta.status_li === "queued";
+      return (
+        p.meta.status_ig === "queued" ||
+        p.meta.status_li === "queued" ||
+        p.meta.status_tt === "queued"
+      );
     })
     .map((p) => {
       const networks: string[] = [];
       if (p.meta.status_ig === "queued") networks.push("Instagram");
       if (p.meta.status_li === "queued") networks.push("LinkedIn");
+      if (p.meta.status_tt === "queued") networks.push("TikTok");
       return { slug: p.slug, title: p.title, networks, scheduled: p.meta.scheduled };
     });
 

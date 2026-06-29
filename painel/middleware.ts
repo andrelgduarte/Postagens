@@ -10,6 +10,8 @@ const isPublic = createRouteMatcher([
   "/sign-up(.*)",
   "/api/scheduler(.*)",
   "/api/admin(.*)",
+  "/terms",
+  "/privacy",
 ]);
 
 export default clerkEnabled

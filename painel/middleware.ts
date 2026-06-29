@@ -10,6 +10,7 @@ const isPublic = createRouteMatcher([
   "/sign-up(.*)",
   "/api/scheduler(.*)",
   "/api/admin(.*)",
+  "/tiktok(.*).txt",
 ]);
 
 export default clerkEnabled

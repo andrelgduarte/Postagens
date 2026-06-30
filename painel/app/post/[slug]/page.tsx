@@ -78,6 +78,7 @@ export default async function PostPage({
           captionIg: post.captionIg,
           captionLi: post.captionLi,
           captionTt: post.captionTt,
+          captionTh: post.captionTh,
           meta: post.meta,
         }}
       />

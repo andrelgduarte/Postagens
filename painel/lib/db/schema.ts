@@ -73,6 +73,23 @@ export const tiktokAccounts = pgTable(
   (t) => [unique("tiktok_accounts_user_open_uq").on(t.userId, t.openId)]
 );
 
+export const threadsAccounts = pgTable(
+  "threads_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull().default("default-user"),
+    threadsUserId: text("threads_user_id").notNull(),
+    username: text("username").notNull(),
+    avatarUrl: text("avatar_url"),
+    accessToken: text("access_token").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("threads_accounts_user_th_uq").on(t.userId, t.threadsUserId)]
+);
+
 export const posts = pgTable(
   "posts",
   {
@@ -86,6 +103,7 @@ export const posts = pgTable(
     statusIg: text("status_ig").notNull().default("queued"),
     statusLi: text("status_li").notNull().default("queued"),
     statusTt: text("status_tt").notNull().default("queued"),
+    statusTh: text("status_th").notNull().default("queued"),
     autoPublish: boolean("auto_publish").notNull().default(false),
     accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" }),
     igPostId: text("ig_post_id"),
@@ -111,6 +129,10 @@ export const posts = pgTable(
       "posts_status_tt_chk",
       sql`${t.statusTt} IN ('queued','posted','skipped','failed')`
     ),
+    check(
+      "posts_status_th_chk",
+      sql`${t.statusTh} IN ('queued','posted','skipped','failed')`
+    ),
   ]
 );
 
@@ -126,7 +148,7 @@ export const captions = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.postId, t.network] }),
-    check("captions_network_chk", sql`${t.network} IN ('ig','li','tt')`),
+    check("captions_network_chk", sql`${t.network} IN ('ig','li','tt','th')`),
   ]
 );
 
@@ -210,3 +232,5 @@ export type LinkedinAccount = typeof linkedinAccounts.$inferSelect;
 export type LinkedinAccountInsert = typeof linkedinAccounts.$inferInsert;
 export type TiktokAccount = typeof tiktokAccounts.$inferSelect;
 export type TiktokAccountInsert = typeof tiktokAccounts.$inferInsert;
+export type ThreadsAccount = typeof threadsAccounts.$inferSelect;
+export type ThreadsAccountInsert = typeof threadsAccounts.$inferInsert;

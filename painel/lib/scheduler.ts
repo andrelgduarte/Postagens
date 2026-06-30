@@ -16,6 +16,7 @@ import { listUsersWithActivity } from "./users";
 import { getMinutesInTZ, zonedISOToUtc } from "./tz";
 import { publishLinkedInPost } from "./linkedin-publish";
 import { publishTikTokPost } from "./tiktok-publish";
+import { publishThreadsPost } from "./threads-publish";
 
 export type TickOptions = {
   now?: Date;
@@ -120,6 +121,25 @@ export async function findDueTTPostsForUser(
     const m = p.meta;
     if (!m.auto_publish) continue;
     if (m.status_tt !== "queued") continue;
+    if (!m.scheduled) continue;
+    const when = parseScheduled(m.scheduled);
+    if (!when) continue;
+    if (when.getTime() > now.getTime()) continue;
+    out.push(p.slug);
+  }
+  return out;
+}
+
+export async function findDueTHPostsForUser(
+  now: Date,
+  userId: string
+): Promise<string[]> {
+  const posts = await listPosts(userId);
+  const out: string[] = [];
+  for (const p of posts) {
+    const m = p.meta;
+    if (!m.auto_publish) continue;
+    if (m.status_th !== "queued") continue;
     if (!m.scheduled) continue;
     const when = parseScheduled(m.scheduled);
     if (!when) continue;
@@ -324,6 +344,56 @@ async function runTTPass(
   }
 }
 
+async function runTHPass(
+  userId: string,
+  _config: Config,
+  now: Date,
+  opts: TickOptions,
+  result: TickResult
+): Promise<void> {
+  const slugs = await findDueTHPostsForUser(now, userId);
+  for (const slug of slugs) {
+    const post = await getPostBySlugGlobal(slug);
+    if (!post) continue;
+    if (post.images.length === 0 && post.videos.length === 0 && !post.captionTh.trim()) {
+      await logEvent({ event: "skip", slug, message: "TH: sem mídia nem texto" });
+      continue;
+    }
+    await logEvent({ event: "publish_start", slug, message: "TH API" });
+
+    if (opts.dryRun) {
+      result.published.push(`${slug} (TH dry-run)`);
+      continue;
+    }
+
+    const r = await publishThreadsPost({ userId, post });
+    if (r.ok) {
+      await writeMetaGlobal(slug, { ...post.meta, status_th: "posted" });
+      result.published.push(`${slug} (TH)`);
+      await logEvent({ event: "publish_ok", slug, message: `TH API ${r.threadId}` });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✓ Postado no Threads: ${post.title}`,
+          text:
+            `Threads aceitou o post.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nThread ID: ${r.threadId}\n`,
+        });
+      }
+    } else {
+      result.failed.push({ slug, reason: r.error });
+      await logEvent({ event: "publish_fail", slug, message: `TH: ${r.error}` });
+      if (post.userId) {
+        await notifyByEmail(post.userId, {
+          subject: `✗ Falha Threads: ${post.title}`,
+          text:
+            `Publicação no Threads falhou.\n\n` +
+            `Slug: ${slug}\nTítulo: ${post.title}\nErro: ${r.error}\n`,
+        });
+      }
+    }
+  }
+}
+
 async function runUserPass(
   userId: string,
   now: Date,
@@ -404,6 +474,8 @@ async function runUserPass(
   await runLIPass(userId, config, now, opts, result);
   // TikTok inbox pass (independente)
   await runTTPass(userId, config, now, opts, result);
+  // Threads pass (independente)
+  await runTHPass(userId, config, now, opts, result);
 }
 
 export async function runTick(opts: TickOptions = {}): Promise<TickResult> {

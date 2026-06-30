@@ -28,7 +28,7 @@ export async function resetRetry(slug: string) {
 
 export async function updateStatus(
   slug: string,
-  network: "ig" | "li" | "tt",
+  network: "ig" | "li" | "tt" | "th",
   status: NetworkStatus
 ) {
   const post = await getPost(slug);
@@ -36,7 +36,8 @@ export async function updateStatus(
   const meta = { ...post.meta };
   if (network === "ig") meta.status_ig = status;
   else if (network === "li") meta.status_li = status;
-  else meta.status_tt = status;
+  else if (network === "tt") meta.status_tt = status;
+  else meta.status_th = status;
   await writeMeta(slug, meta);
   revalidatePath("/");
   revalidatePath(`/post/${slug}`);
@@ -44,7 +45,7 @@ export async function updateStatus(
 
 export async function saveCaption(
   slug: string,
-  network: "ig" | "li" | "tt",
+  network: "ig" | "li" | "tt" | "th",
   content: string
 ) {
   await writeCaption(slug, network, content);
@@ -148,6 +149,30 @@ export async function publishTikTokAction(
   revalidatePath("/");
   revalidatePath(`/post/${slug}`);
   return { publishId: r.publishId };
+}
+
+export async function publishThreadsAction(
+  slug: string
+): Promise<{ threadId: string }> {
+  const post = await getPost(slug);
+  if (!post) throw new Error("Post não encontrado");
+  if (post.meta.status_th === "posted") throw new Error("Já publicado no Threads");
+  if (post.images.length === 0 && post.videos.length === 0 && !post.captionTh.trim()) {
+    throw new Error("Threads exige mídia ou texto");
+  }
+
+  const { publishThreadsPost } = await import("@/lib/threads-publish");
+  const r = await publishThreadsPost({ userId: post.userId, post });
+  if (!r.ok) throw new Error(r.error);
+
+  await writeMeta(slug, {
+    ...post.meta,
+    status_th: "posted",
+    published_at: post.meta.published_at ?? new Date().toISOString(),
+  });
+  revalidatePath("/");
+  revalidatePath(`/post/${slug}`);
+  return { threadId: r.threadId };
 }
 
 export async function publishLinkedInAction(

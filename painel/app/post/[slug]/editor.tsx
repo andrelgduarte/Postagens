@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   publishInstagramAction,
   publishLinkedInAction,
+  publishThreadsAction,
   publishTikTokAction,
   resetRetry,
   saveAccount,
@@ -36,6 +37,7 @@ const TYPE_OPTIONS: PostType[] = ["single", "carousel", "reel", "story"];
 const IG_COMPOSER = "https://www.instagram.com/";
 const LI_COMPOSER = "https://www.linkedin.com/feed/?shareActive=true";
 const TT_COMPOSER = "https://www.tiktok.com/upload";
+const TH_COMPOSER = "https://www.threads.net/";
 
 type AccountOption = { id: string; name: string; is_default: boolean };
 
@@ -46,7 +48,13 @@ export function PostEditor({
 }: {
   slug: string;
   accounts: AccountOption[];
-  initial: { captionIg: string; captionLi: string; captionTt: string; meta: PostMeta };
+  initial: {
+    captionIg: string;
+    captionLi: string;
+    captionTt: string;
+    captionTh: string;
+    meta: PostMeta;
+  };
 }) {
   const [scheduled, setScheduled] = useState(initial.meta.scheduled ?? "");
   const [type, setType] = useState<PostType>(initial.meta.type ?? "single");
@@ -170,6 +178,14 @@ export function PostEditor({
           initialStatus={initial.meta.status_tt}
           composerUrl={TT_COMPOSER}
         />
+        <NetworkPanel
+          slug={slug}
+          network="th"
+          label="Threads"
+          initialCaption={initial.captionTh}
+          initialStatus={initial.meta.status_th}
+          composerUrl={TH_COMPOSER}
+        />
       </div>
     </div>
   );
@@ -259,7 +275,7 @@ function NetworkPanel({
   igPostId,
 }: {
   slug: string;
-  network: "ig" | "li" | "tt";
+  network: "ig" | "li" | "tt" | "th";
   label: string;
   initialCaption: string;
   initialStatus: NetworkStatus;
@@ -286,8 +302,10 @@ function NetworkPanel({
         setPublishedId(postId);
       } else if (network === "li") {
         await publishLinkedInAction(slug);
-      } else {
+      } else if (network === "tt") {
         await publishTikTokAction(slug);
+      } else {
+        await publishThreadsAction(slug);
       }
       setStatus("posted");
     } catch (e) {
@@ -386,7 +404,9 @@ function NetworkPanel({
               ? "Publicação automática via Graph API (upload no Blob → IG)"
               : network === "li"
                 ? "Publicação automática via LinkedIn API (perfil pessoal)"
-                : "Envio pro inbox/drafts do TikTok — abra o app pra finalizar"}
+                : network === "tt"
+                  ? "Envio pro inbox/drafts do TikTok — abra o app pra finalizar"
+                  : "Publicação automática via Threads API (perfil pessoal)"}
           </p>
           <button
             type="button"
@@ -397,7 +417,9 @@ function NetworkPanel({
                 ? "bg-pink-600 hover:bg-pink-700"
                 : network === "li"
                   ? "bg-sky-700 hover:bg-sky-800"
-                  : "bg-neutral-900 hover:bg-neutral-700"
+                  : network === "tt"
+                    ? "bg-neutral-900 hover:bg-neutral-700"
+                    : "bg-neutral-800 hover:bg-neutral-900"
             }`}
           >
             {publishing
@@ -406,7 +428,9 @@ function NetworkPanel({
                 ? "🚀 Publicar no Instagram"
                 : network === "li"
                   ? "🚀 Publicar no LinkedIn"
-                  : "🚀 Enviar pro TikTok"}
+                  : network === "tt"
+                    ? "🚀 Enviar pro TikTok"
+                    : "🚀 Publicar no Threads"}
           </button>
           {publishError && (
             <p className="text-xs text-red-600 dark:text-red-400 break-words">{publishError}</p>

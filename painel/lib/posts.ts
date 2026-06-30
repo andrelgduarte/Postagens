@@ -24,6 +24,7 @@ export type PostMeta = {
   status_ig: NetworkStatus;
   status_li: NetworkStatus;
   status_tt: NetworkStatus;
+  status_th: NetworkStatus;
   tags?: string[];
   ig_post_id?: string;
   type?: PostType;
@@ -49,12 +50,14 @@ export type PostDetail = Post & {
   captionIg: string;
   captionLi: string;
   captionTt: string;
+  captionTh: string;
 };
 
 const DEFAULT_META: PostMeta = {
   status_ig: "queued",
   status_li: "queued",
   status_tt: "queued",
+  status_th: "queued",
 };
 
 function toIso(d: Date | null | undefined): string | undefined {
@@ -92,6 +95,7 @@ function metaFromRow(
     status_ig: row.statusIg as NetworkStatus,
     status_li: row.statusLi as NetworkStatus,
     status_tt: row.statusTt as NetworkStatus,
+    status_th: row.statusTh as NetworkStatus,
     type: row.type as PostType,
     auto_publish: row.autoPublish,
   };
@@ -139,19 +143,22 @@ function splitMedia(rows: MediaRow[]): { images: string[]; videos: string[] } {
   };
 }
 
-async function captionsByPost(postIds: string[]): Promise<Map<string, { ig: string; li: string; tt: string }>> {
-  const out = new Map<string, { ig: string; li: string; tt: string }>();
+async function captionsByPost(
+  postIds: string[]
+): Promise<Map<string, { ig: string; li: string; tt: string; th: string }>> {
+  const out = new Map<string, { ig: string; li: string; tt: string; th: string }>();
   if (postIds.length === 0) return out;
   const rows = await db
     .select()
     .from(captionsTable)
     .where(inArray(captionsTable.postId, postIds));
-  for (const id of postIds) out.set(id, { ig: "", li: "", tt: "" });
+  for (const id of postIds) out.set(id, { ig: "", li: "", tt: "", th: "" });
   for (const r of rows) {
     const entry = out.get(r.postId)!;
     if (r.network === "ig") entry.ig = r.content;
     if (r.network === "li") entry.li = r.content;
     if (r.network === "tt") entry.tt = r.content;
+    if (r.network === "th") entry.th = r.content;
   }
   return out;
 }
@@ -224,7 +231,7 @@ export async function getPost(slug: string, userId?: string): Promise<PostDetail
   if (!row) return null;
   const [mediaRows, capMap, account] = await Promise.all([
     mediaByPost([row.id]).then((m) => m.get(row.id) ?? []),
-    captionsByPost([row.id]).then((c) => c.get(row.id) ?? { ig: "", li: "", tt: "" }),
+    captionsByPost([row.id]).then((c) => c.get(row.id) ?? { ig: "", li: "", tt: "", th: "" }),
     loadAccountByUuid(row.accountId),
   ]);
   const split = splitMedia(mediaRows);
@@ -239,6 +246,7 @@ export async function getPost(slug: string, userId?: string): Promise<PostDetail
     captionIg: capMap.ig,
     captionLi: capMap.li,
     captionTt: capMap.tt,
+    captionTh: capMap.th,
   };
 }
 
@@ -253,7 +261,7 @@ export async function getPostBySlugGlobal(slug: string): Promise<PostDetail | nu
   if (!row) return null;
   const [mediaRows, capMap, account] = await Promise.all([
     mediaByPost([row.id]).then((m) => m.get(row.id) ?? []),
-    captionsByPost([row.id]).then((c) => c.get(row.id) ?? { ig: "", li: "", tt: "" }),
+    captionsByPost([row.id]).then((c) => c.get(row.id) ?? { ig: "", li: "", tt: "", th: "" }),
     loadAccountByUuid(row.accountId),
   ]);
   const split = splitMedia(mediaRows);
@@ -268,6 +276,7 @@ export async function getPostBySlugGlobal(slug: string): Promise<PostDetail | nu
     captionIg: capMap.ig,
     captionLi: capMap.li,
     captionTt: capMap.tt,
+    captionTh: capMap.th,
   };
 }
 
@@ -283,6 +292,7 @@ export async function writeMeta(slug: string, meta: PostMeta, userId?: string): 
       statusIg: meta.status_ig,
       statusLi: meta.status_li,
       statusTt: meta.status_tt,
+      statusTh: meta.status_th,
       type: (meta.type ?? "single") as PostType,
       autoPublish: meta.auto_publish ?? false,
       accountId: accountUuid,
@@ -315,6 +325,7 @@ export async function writeMetaGlobal(slug: string, meta: PostMeta): Promise<voi
       statusIg: meta.status_ig,
       statusLi: meta.status_li,
       statusTt: meta.status_tt,
+      statusTh: meta.status_th,
       type: (meta.type ?? "single") as PostType,
       autoPublish: meta.auto_publish ?? false,
       accountId: accountUuid,
@@ -330,7 +341,7 @@ export async function writeMetaGlobal(slug: string, meta: PostMeta): Promise<voi
 
 export async function writeCaption(
   slug: string,
-  network: "ig" | "li" | "tt",
+  network: "ig" | "li" | "tt" | "th",
   content: string,
   userId?: string
 ): Promise<void> {
@@ -468,6 +479,7 @@ export async function createPost(opts: {
     { postId: inserted.id, network: "ig", content: "" },
     { postId: inserted.id, network: "li", content: "" },
     { postId: inserted.id, network: "tt", content: "" },
+    { postId: inserted.id, network: "th", content: "" },
   ]);
 
   if (written.length > 0) {

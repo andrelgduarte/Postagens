@@ -4,9 +4,11 @@ import { useState, useTransition } from "react";
 import type { Account, Config, PostType } from "@/lib/config";
 import {
   type LinkedinAccountInfo,
+  type ThreadsAccountInfo,
   type TiktokAccountInfo,
   deleteAccount,
   disconnectLinkedinAccount,
+  disconnectThreadsAccount,
   disconnectTiktokAccount,
   saveDefaults,
   saveNotifications,
@@ -30,6 +32,8 @@ export function SettingsView({
   linkedinStatus,
   tiktokAccount,
   tiktokStatus,
+  threadsAccount,
+  threadsStatus,
 }: {
   config: Config;
   legacyHint: Account | null;
@@ -37,6 +41,8 @@ export function SettingsView({
   linkedinStatus?: { ok?: boolean; error?: string };
   tiktokAccount: TiktokAccountInfo;
   tiktokStatus?: { ok?: boolean; error?: string };
+  threadsAccount: ThreadsAccountInfo;
+  threadsStatus?: { ok?: boolean; error?: string };
 }) {
   return (
     <div className="space-y-10">
@@ -46,6 +52,7 @@ export function SettingsView({
       <NotificationsSection notifications={config.notifications} />
       <LinkedInSection account={linkedinAccount} status={linkedinStatus} />
       <TikTokSection account={tiktokAccount} status={tiktokStatus} />
+      <ThreadsSection account={threadsAccount} status={threadsStatus} />
       <StagingSection staging_dir={config.staging_dir} />
     </div>
   );
@@ -350,7 +357,7 @@ function DefaultsSection({ defaults }: { defaults: Config["defaults"] }) {
     });
   }
 
-  function toggleNetwork(net: "ig" | "li" | "tt") {
+  function toggleNetwork(net: "ig" | "li" | "tt" | "th") {
     const next = form.networks.includes(net)
       ? form.networks.filter((n) => n !== net)
       : [...form.networks, net];
@@ -410,6 +417,14 @@ function DefaultsSection({ defaults }: { defaults: Config["defaults"] }) {
             onChange={() => toggleNetwork("tt")}
           />
           TikTok
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={form.networks.includes("th")}
+            onChange={() => toggleNetwork("th")}
+          />
+          Threads
         </label>
       </div>
 
@@ -761,6 +776,101 @@ function TikTokSection({
           <div className="flex gap-2">
             <a
               href="/api/auth/tiktok/start"
+              className="text-sm rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            >
+              Reconectar
+            </a>
+            <button
+              type="button"
+              onClick={disconnect}
+              disabled={pending}
+              className="text-sm rounded-md border border-red-300 dark:border-red-900 text-red-700 dark:text-red-300 px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+            >
+              {pending ? "Desconectando…" : "Desconectar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ThreadsSection({
+  account,
+  status,
+}: {
+  account: ThreadsAccountInfo;
+  status?: { ok?: boolean; error?: string };
+}) {
+  const [pending, startTransition] = useTransition();
+  const [now] = useState(() => Date.now());
+
+  function disconnect() {
+    if (!account) return;
+    if (!confirm(`Desconectar @${account.username}? Posts com status_th=queued vão parar de sair até reconectar.`)) return;
+    startTransition(async () => {
+      await disconnectThreadsAccount(account.id);
+    });
+  }
+
+  const expires = account?.tokenExpiresAt ? new Date(account.tokenExpiresAt) : null;
+  const daysToExpire = expires ? Math.floor((expires.getTime() - now) / 86_400_000) : null;
+
+  return (
+    <Section
+      title="Threads (API direta)"
+      description="Conexão OAuth com seu perfil pessoal do Threads. Posts com status_th=queued e auto_publish=true são publicados via Threads Content Publishing API."
+    >
+      {status?.ok && (
+        <div className="text-xs rounded-md px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+          ✓ Conta conectada com sucesso.
+        </div>
+      )}
+      {status?.error && (
+        <div className="text-xs rounded-md px-3 py-2 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900">
+          ✗ {status.error}
+        </div>
+      )}
+
+      {!account ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            Nenhuma conta conectada. Conectar abre a tela de autorização do Threads — scopes{" "}
+            <code className="font-mono">threads_basic</code> +{" "}
+            <code className="font-mono">threads_content_publish</code>.
+          </p>
+          <a
+            href="/api/auth/threads/start"
+            className="self-start text-sm rounded-md bg-neutral-900 text-white px-4 py-2 hover:bg-neutral-700 dark:bg-white dark:text-neutral-900"
+          >
+            Conectar Threads
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="rounded-md border border-neutral-200 dark:border-neutral-800 p-3 text-sm space-y-1">
+            <div>
+              <span className="text-neutral-500">Conta:</span>{" "}
+              <span className="font-medium">@{account.username}</span>
+            </div>
+            <div className="text-xs text-neutral-500">
+              <code className="font-mono">{account.threadsUserId}</code>
+            </div>
+            {expires && (
+              <div className="text-xs text-neutral-500">
+                Token expira em {expires.toLocaleString("pt-BR")}
+                {daysToExpire !== null && ` (~${daysToExpire} dias)`}
+              </div>
+            )}
+            {account.scope && (
+              <div className="text-xs text-neutral-500">
+                Scopes: <code className="font-mono">{account.scope}</code>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <a
+              href="/api/auth/threads/start"
               className="text-sm rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800"
             >
               Reconectar

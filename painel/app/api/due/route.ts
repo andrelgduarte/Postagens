@@ -17,7 +17,8 @@ export async function GET() {
       return (
         p.meta.status_ig === "queued" ||
         p.meta.status_li === "queued" ||
-        p.meta.status_tt === "queued"
+        p.meta.status_tt === "queued" ||
+        p.meta.status_th === "queued"
       );
     })
     .map((p) => {
@@ -25,6 +26,7 @@ export async function GET() {
       if (p.meta.status_ig === "queued") networks.push("Instagram");
       if (p.meta.status_li === "queued") networks.push("LinkedIn");
       if (p.meta.status_tt === "queued") networks.push("TikTok");
+      if (p.meta.status_th === "queued") networks.push("Threads");
       return { slug: p.slug, title: p.title, networks, scheduled: p.meta.scheduled };
     });
 

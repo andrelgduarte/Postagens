@@ -1,6 +1,6 @@
 import { legacyAccountFromEnv, loadConfig } from "@/lib/config";
 import { SettingsView } from "./view";
-import { getLinkedinAccountInfo, getTiktokAccountInfo } from "./actions";
+import { getLinkedinAccountInfo, getThreadsAccountInfo, getTiktokAccountInfo } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +12,16 @@ export default async function SettingsPage({
     li_error?: string;
     tt_ok?: string;
     tt_error?: string;
+    th_ok?: string;
+    th_error?: string;
   }>;
 }) {
   const config = await loadConfig();
   const legacy = config.accounts.length === 0 ? legacyAccountFromEnv() : null;
-  const [linkedinAccount, tiktokAccount] = await Promise.all([
+  const [linkedinAccount, tiktokAccount, threadsAccount] = await Promise.all([
     getLinkedinAccountInfo(),
     getTiktokAccountInfo(),
+    getThreadsAccountInfo(),
   ]);
   const params = await searchParams;
   const linkedinStatus =
@@ -32,6 +35,12 @@ export default async function SettingsPage({
       ? { ok: true }
       : params.tt_error
         ? { error: params.tt_error }
+        : undefined;
+  const threadsStatus =
+    params.th_ok === "1"
+      ? { ok: true }
+      : params.th_error
+        ? { error: params.th_error }
         : undefined;
 
   return (
@@ -49,6 +58,8 @@ export default async function SettingsPage({
         linkedinStatus={linkedinStatus}
         tiktokAccount={tiktokAccount}
         tiktokStatus={tiktokStatus}
+        threadsAccount={threadsAccount}
+        threadsStatus={threadsStatus}
       />
     </div>
   );

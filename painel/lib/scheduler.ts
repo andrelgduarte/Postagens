@@ -17,6 +17,7 @@ import { getMinutesInTZ, zonedISOToUtc } from "./tz";
 import { publishLinkedInPost } from "./linkedin-publish";
 import { publishTikTokPost } from "./tiktok-publish";
 import { publishThreadsPost } from "./threads-publish";
+import { isNetworkDisabled } from "./networks";
 
 export type TickOptions = {
   now?: Date;
@@ -471,11 +472,17 @@ async function runUserPass(
   }
 
   // LinkedIn webhook pass (independente do IG)
-  await runLIPass(userId, config, now, opts, result);
+  if (!isNetworkDisabled("li")) {
+    await runLIPass(userId, config, now, opts, result);
+  }
   // TikTok inbox pass (independente)
-  await runTTPass(userId, config, now, opts, result);
+  if (!isNetworkDisabled("tt")) {
+    await runTTPass(userId, config, now, opts, result);
+  }
   // Threads pass (independente)
-  await runTHPass(userId, config, now, opts, result);
+  if (!isNetworkDisabled("th")) {
+    await runTHPass(userId, config, now, opts, result);
+  }
 }
 
 export async function runTick(opts: TickOptions = {}): Promise<TickResult> {

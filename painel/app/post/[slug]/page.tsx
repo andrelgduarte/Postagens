@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPost, imageUrl, listPosts } from "@/lib/posts";
 import { listAccounts } from "@/lib/config";
+import { getDisabledNetworks } from "@/lib/networks";
 import { PostEditor } from "./editor";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,7 @@ export default async function PostPage({
       <PostEditor
         slug={post.slug}
         accounts={accounts.map((a) => ({ id: a.id, name: a.name, is_default: a.is_default }))}
+        disabledNetworks={getDisabledNetworks()}
         initial={{
           captionIg: post.captionIg,
           captionLi: post.captionLi,

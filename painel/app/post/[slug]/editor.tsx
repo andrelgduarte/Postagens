@@ -15,6 +15,7 @@ import {
   updateStatus,
 } from "@/app/actions";
 import type { NetworkStatus, PostMeta, PostType } from "@/lib/posts";
+import type { Network } from "@/lib/networks";
 
 const STATUS_LABELS: Record<NetworkStatus, string> = {
   queued: "Na fila",
@@ -44,10 +45,12 @@ type AccountOption = { id: string; name: string; is_default: boolean };
 export function PostEditor({
   slug,
   accounts,
+  disabledNetworks,
   initial,
 }: {
   slug: string;
   accounts: AccountOption[];
+  disabledNetworks: Network[];
   initial: {
     captionIg: string;
     captionLi: string;
@@ -56,6 +59,7 @@ export function PostEditor({
     meta: PostMeta;
   };
 }) {
+  const disabled = new Set(disabledNetworks);
   const [scheduled, setScheduled] = useState(initial.meta.scheduled ?? "");
   const [type, setType] = useState<PostType>(initial.meta.type ?? "single");
   const [autoPublish, setAutoPublish] = useState<boolean>(
@@ -153,39 +157,47 @@ export function PostEditor({
       <StatusDetail slug={slug} meta={initial.meta} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <NetworkPanel
-          slug={slug}
-          network="ig"
-          label="Instagram"
-          initialCaption={initial.captionIg}
-          initialStatus={initial.meta.status_ig}
-          composerUrl={IG_COMPOSER}
-          igPostId={initial.meta.ig_post_id}
-        />
-        <NetworkPanel
-          slug={slug}
-          network="li"
-          label="LinkedIn"
-          initialCaption={initial.captionLi}
-          initialStatus={initial.meta.status_li}
-          composerUrl={LI_COMPOSER}
-        />
-        <NetworkPanel
-          slug={slug}
-          network="tt"
-          label="TikTok"
-          initialCaption={initial.captionTt}
-          initialStatus={initial.meta.status_tt}
-          composerUrl={TT_COMPOSER}
-        />
-        <NetworkPanel
-          slug={slug}
-          network="th"
-          label="Threads"
-          initialCaption={initial.captionTh}
-          initialStatus={initial.meta.status_th}
-          composerUrl={TH_COMPOSER}
-        />
+        {!disabled.has("ig") && (
+          <NetworkPanel
+            slug={slug}
+            network="ig"
+            label="Instagram"
+            initialCaption={initial.captionIg}
+            initialStatus={initial.meta.status_ig}
+            composerUrl={IG_COMPOSER}
+            igPostId={initial.meta.ig_post_id}
+          />
+        )}
+        {!disabled.has("li") && (
+          <NetworkPanel
+            slug={slug}
+            network="li"
+            label="LinkedIn"
+            initialCaption={initial.captionLi}
+            initialStatus={initial.meta.status_li}
+            composerUrl={LI_COMPOSER}
+          />
+        )}
+        {!disabled.has("tt") && (
+          <NetworkPanel
+            slug={slug}
+            network="tt"
+            label="TikTok"
+            initialCaption={initial.captionTt}
+            initialStatus={initial.meta.status_tt}
+            composerUrl={TT_COMPOSER}
+          />
+        )}
+        {!disabled.has("th") && (
+          <NetworkPanel
+            slug={slug}
+            network="th"
+            label="Threads"
+            initialCaption={initial.captionTh}
+            initialStatus={initial.meta.status_th}
+            composerUrl={TH_COMPOSER}
+          />
+        )}
       </div>
     </div>
   );

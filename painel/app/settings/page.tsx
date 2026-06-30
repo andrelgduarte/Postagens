@@ -1,4 +1,5 @@
 import { legacyAccountFromEnv, loadConfig } from "@/lib/config";
+import { getDisabledNetworks } from "@/lib/networks";
 import { SettingsView } from "./view";
 import { getLinkedinAccountInfo, getThreadsAccountInfo, getTiktokAccountInfo } from "./actions";
 
@@ -54,6 +55,7 @@ export default async function SettingsPage({
       <SettingsView
         config={config}
         legacyHint={legacy}
+        disabledNetworks={getDisabledNetworks()}
         linkedinAccount={linkedinAccount}
         linkedinStatus={linkedinStatus}
         tiktokAccount={tiktokAccount}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Account, Config, PostType } from "@/lib/config";
+import type { Network } from "@/lib/networks";
 import {
   type LinkedinAccountInfo,
   type ThreadsAccountInfo,
@@ -28,6 +29,7 @@ const TYPE_LABELS: Record<PostType, string> = {
 export function SettingsView({
   config,
   legacyHint,
+  disabledNetworks,
   linkedinAccount,
   linkedinStatus,
   tiktokAccount,
@@ -37,6 +39,7 @@ export function SettingsView({
 }: {
   config: Config;
   legacyHint: Account | null;
+  disabledNetworks: Network[];
   linkedinAccount: LinkedinAccountInfo;
   linkedinStatus?: { ok?: boolean; error?: string };
   tiktokAccount: TiktokAccountInfo;
@@ -44,15 +47,16 @@ export function SettingsView({
   threadsAccount: ThreadsAccountInfo;
   threadsStatus?: { ok?: boolean; error?: string };
 }) {
+  const disabled = new Set(disabledNetworks);
   return (
     <div className="space-y-10">
       <AccountsSection accounts={config.accounts} legacyHint={legacyHint} />
-      <DefaultsSection defaults={config.defaults} />
+      <DefaultsSection defaults={config.defaults} disabled={disabled} />
       <SchedulerSection scheduler={config.scheduler} />
       <NotificationsSection notifications={config.notifications} />
-      <LinkedInSection account={linkedinAccount} status={linkedinStatus} />
-      <TikTokSection account={tiktokAccount} status={tiktokStatus} />
-      <ThreadsSection account={threadsAccount} status={threadsStatus} />
+      {!disabled.has("li") && <LinkedInSection account={linkedinAccount} status={linkedinStatus} />}
+      {!disabled.has("tt") && <TikTokSection account={tiktokAccount} status={tiktokStatus} />}
+      {!disabled.has("th") && <ThreadsSection account={threadsAccount} status={threadsStatus} />}
       <StagingSection staging_dir={config.staging_dir} />
     </div>
   );
@@ -344,7 +348,13 @@ function TokenExpiryBadge({
   return <div className={`mt-1 text-[11px] ${tone}`}>{label}</div>;
 }
 
-function DefaultsSection({ defaults }: { defaults: Config["defaults"] }) {
+function DefaultsSection({
+  defaults,
+  disabled,
+}: {
+  defaults: Config["defaults"];
+  disabled: Set<Network>;
+}) {
   const [form, setForm] = useState(defaults);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -394,38 +404,46 @@ function DefaultsSection({ defaults }: { defaults: Config["defaults"] }) {
 
       <div className="flex flex-wrap gap-4 text-sm">
         <span className="text-neutral-500">Redes:</span>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={form.networks.includes("ig")}
-            onChange={() => toggleNetwork("ig")}
-          />
-          Instagram
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={form.networks.includes("li")}
-            onChange={() => toggleNetwork("li")}
-          />
-          LinkedIn
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={form.networks.includes("tt")}
-            onChange={() => toggleNetwork("tt")}
-          />
-          TikTok
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={form.networks.includes("th")}
-            onChange={() => toggleNetwork("th")}
-          />
-          Threads
-        </label>
+        {!disabled.has("ig") && (
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={form.networks.includes("ig")}
+              onChange={() => toggleNetwork("ig")}
+            />
+            Instagram
+          </label>
+        )}
+        {!disabled.has("li") && (
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={form.networks.includes("li")}
+              onChange={() => toggleNetwork("li")}
+            />
+            LinkedIn
+          </label>
+        )}
+        {!disabled.has("tt") && (
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={form.networks.includes("tt")}
+              onChange={() => toggleNetwork("tt")}
+            />
+            TikTok
+          </label>
+        )}
+        {!disabled.has("th") && (
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={form.networks.includes("th")}
+              onChange={() => toggleNetwork("th")}
+            />
+            Threads
+          </label>
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-sm">

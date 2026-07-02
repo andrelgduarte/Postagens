@@ -35,6 +35,7 @@ export async function POST(req: Request): Promise<Response> {
           allowedContentTypes: ALLOWED_TYPES,
           maximumSizeInBytes: MAX_BYTES,
           addRandomSuffix: false,
+          allowOverwrite: true,
         };
       },
       onUploadCompleted: async () => {

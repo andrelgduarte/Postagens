@@ -1,6 +1,7 @@
 import { type PostType } from "./posts";
 import { getAccount } from "./config";
 import { cleanupTempMedia, resolveMediaUrls } from "./media-resolve";
+import { validateFeedImageAspect } from "./instagram-validate";
 
 const GRAPH_BASE = "https://graph.facebook.com";
 
@@ -82,6 +83,9 @@ async function publishPhoto(
 
   const resolved = await resolveMediaUrls(opts.slug, opts.images, userId);
   try {
+    for (const r of resolved) {
+      await validateFeedImageAspect(r.url);
+    }
     let creationId: string;
     if (resolved.length === 1) {
       const container = await graphPost(version, `${igUserId}/media`, {

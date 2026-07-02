@@ -310,8 +310,9 @@ function NetworkPanel({
     try {
       if (dirty) await saveCaption(slug, network, caption);
       if (network === "ig") {
-        const { postId } = await publishInstagramAction(slug);
-        setPublishedId(postId);
+        const result = await publishInstagramAction(slug);
+        if (!result.ok) throw new Error(result.error);
+        setPublishedId(result.postId);
       } else if (network === "li") {
         await publishLinkedInAction(slug);
       } else if (network === "tt") {

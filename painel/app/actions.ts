@@ -197,38 +197,44 @@ export async function publishLinkedInAction(
   return { postUrn: r.postUrn };
 }
 
-export async function publishInstagramAction(
-  slug: string
-): Promise<{ postId: string; accountName: string }> {
-  const post = await getPost(slug);
-  if (!post) throw new Error("Post não encontrado");
-  if (post.meta.status_ig === "posted") throw new Error("Já publicado no Instagram");
-  const type: PostType =
-    post.meta.type ?? (post.videos.length > 0 ? "reel" : post.images.length >= 2 ? "carousel" : "single");
-  if (type !== "story" && !post.captionIg.trim()) {
-    throw new Error("Legenda do Instagram está vazia");
+export type PublishIgResult =
+  | { ok: true; postId: string; accountName: string }
+  | { ok: false; error: string };
+
+export async function publishInstagramAction(slug: string): Promise<PublishIgResult> {
+  try {
+    const post = await getPost(slug);
+    if (!post) throw new Error("Post não encontrado");
+    if (post.meta.status_ig === "posted") throw new Error("Já publicado no Instagram");
+    const type: PostType =
+      post.meta.type ?? (post.videos.length > 0 ? "reel" : post.images.length >= 2 ? "carousel" : "single");
+    if (type !== "story" && !post.captionIg.trim()) {
+      throw new Error("Legenda do Instagram está vazia");
+    }
+
+    const { publishInstagram } = await import("@/lib/instagram");
+    const { postId, accountName } = await publishInstagram({
+      slug,
+      type,
+      images: post.images,
+      videos: post.videos,
+      caption: post.captionIg,
+      accountId: post.meta.account_id,
+      userId: post.userId,
+    });
+
+    await writeMeta(slug, {
+      ...post.meta,
+      status_ig: "posted",
+      ig_post_id: postId,
+      published_at: new Date().toISOString(),
+    });
+    revalidatePath("/");
+    revalidatePath(`/post/${slug}`);
+    return { ok: true, postId, accountName };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-
-  const { publishInstagram } = await import("@/lib/instagram");
-  const { postId, accountName } = await publishInstagram({
-    slug,
-    type,
-    images: post.images,
-    videos: post.videos,
-    caption: post.captionIg,
-    accountId: post.meta.account_id,
-    userId: post.userId,
-  });
-
-  await writeMeta(slug, {
-    ...post.meta,
-    status_ig: "posted",
-    ig_post_id: postId,
-    published_at: new Date().toISOString(),
-  });
-  revalidatePath("/");
-  revalidatePath(`/post/${slug}`);
-  return { postId, accountName };
 }
 
 export async function createPostAction(formData: FormData) {

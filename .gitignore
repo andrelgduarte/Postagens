@@ -24,3 +24,5 @@ staging/
 # pastas pessoais (fontes de publicação) — só no root, não em subpastas
 /Import/
 /60_Dias/
+
+.vercel

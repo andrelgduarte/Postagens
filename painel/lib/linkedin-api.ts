@@ -1,4 +1,4 @@
-const LI_VERSION = "202506";
+const LI_VERSION = "202606";
 const REST_BASE = "https://api.linkedin.com/rest";
 const V2_BASE = "https://api.linkedin.com/v2";
 const OAUTH_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";

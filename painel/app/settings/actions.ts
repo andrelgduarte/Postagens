@@ -114,6 +114,8 @@ function sanitizeAccount(input: Partial<Account>): Account {
     name,
     ig_user_id,
     token,
+    app_id: input.app_id?.trim() || undefined,
+    app_secret: input.app_secret?.trim() || undefined,
     graph_version: input.graph_version?.trim() || undefined,
     is_default: Boolean(input.is_default),
   };

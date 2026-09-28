@@ -22,7 +22,8 @@ export type LogEvent = {
     | "publish_ok"
     | "publish_fail"
     | "retry_scheduled"
-    | "give_up";
+    | "give_up"
+    | "li_token_reminder";
   slug?: string;
   message?: string;
   account?: string;

@@ -9,6 +9,7 @@ const isPublic = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/scheduler(.*)",
+  "/api/linkedin/token-check(.*)",
   "/api/admin(.*)",
   "/terms",
   "/privacy",

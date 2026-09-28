@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { runTick } from "@/lib/scheduler";
 import { checkLinkedinTokens } from "@/lib/linkedin-token-check";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 function authorized(req: Request): boolean {
   const expected = process.env.CRON_SECRET;
-  if (!expected) return true; // dev mode: liberado quando secret ausente
+  if (!expected) return true; // dev: liberado quando secret ausente
   const header = req.headers.get("authorization") ?? "";
   return header === `Bearer ${expected}`;
 }
@@ -18,14 +17,7 @@ async function handle(req: Request) {
   }
   const dryRun = new URL(req.url).searchParams.get("dry") === "1";
   try {
-    const result = await runTick({ dryRun, notify: false });
-    // Lembrete de expiração do token LinkedIn (dedupe ~20h no event_log).
-    // Nunca deve derrubar o tick de publicação.
-    try {
-      await checkLinkedinTokens({ dryRun });
-    } catch (e) {
-      console.error("[token-check] falhou:", e instanceof Error ? e.message : e);
-    }
+    const result = await checkLinkedinTokens({ dryRun });
     return NextResponse.json({ ok: true, result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

@@ -39,6 +39,9 @@ const PostFrontmatter = z
     caption_li: z.string().optional(),
     images: z.array(z.string()).optional(),
     videos: z.array(z.string()).optional(),
+    // Redes-alvo. Se presente, as redes não-listadas entram como 'skipped'
+    // (ex.: ["li"] = publica só no LinkedIn). Ausente = todas 'queued' (padrão).
+    platforms: z.array(z.enum(["ig", "li", "tt", "th"])).optional(),
   })
   .strict();
 
@@ -114,7 +117,10 @@ export type ImportPayload = {
 export async function importFromPayload(opts: ImportPayload): Promise<{ slug: string }> {
   const uid = opts.userId ?? (await currentUserId());
   const fm = opts.frontmatter;
-  if (opts.media.length === 0) throw new Error("Sem mídia");
+  const hasCaption = Boolean((fm.caption_li ?? "").trim() || (fm.caption_ig ?? "").trim());
+  // Post só-texto (sem mídia) é válido desde que tenha legenda — o publicador
+  // do LinkedIn faz createTextPost. Sem mídia E sem legenda não há o que postar.
+  if (opts.media.length === 0 && !hasCaption) throw new Error("Sem mídia nem legenda");
 
   const slugBase = `${fm.date}-${slugify(fm.title) || "post"}`;
   const slug = await nextAvailableSlug(slugBase, uid);
@@ -122,6 +128,8 @@ export async function importFromPayload(opts: ImportPayload): Promise<{ slug: st
   const type = detectType(fm, opts.media.length, hasVideo);
   const accountUuid = fm.account_id ? await getAccountUuid(fm.account_id, uid) : null;
   const scheduled = parseScheduled(fm.date, fm.time);
+  const statusFor = (net: "ig" | "li" | "tt" | "th") =>
+    !fm.platforms || fm.platforms.includes(net) ? "queued" : "skipped";
 
   const [inserted] = await db
     .insert(postsTable)
@@ -134,6 +142,10 @@ export async function importFromPayload(opts: ImportPayload): Promise<{ slug: st
       autoPublish: fm.auto_publish ?? false,
       accountId: accountUuid,
       scheduled,
+      statusIg: statusFor("ig"),
+      statusLi: statusFor("li"),
+      statusTt: statusFor("tt"),
+      statusTh: statusFor("th"),
     })
     .returning({ id: postsTable.id });
 
@@ -142,17 +154,19 @@ export async function importFromPayload(opts: ImportPayload): Promise<{ slug: st
     { postId: inserted.id, network: "li", content: fm.caption_li ?? "" },
   ]);
 
-  await db.insert(mediaTable).values(
-    opts.media.map((m, idx) => ({
-      postId: inserted.id,
-      kind: m.kind,
-      filename: m.filename,
-      sortOrder: idx,
-      blobUrl: m.url,
-      sizeBytes: m.sizeBytes ?? null,
-      contentType: m.contentType ?? CONTENT_TYPE[path.extname(m.filename).toLowerCase()] ?? null,
-    }))
-  );
+  if (opts.media.length > 0) {
+    await db.insert(mediaTable).values(
+      opts.media.map((m, idx) => ({
+        postId: inserted.id,
+        kind: m.kind,
+        filename: m.filename,
+        sortOrder: idx,
+        blobUrl: m.url,
+        sizeBytes: m.sizeBytes ?? null,
+        contentType: m.contentType ?? CONTENT_TYPE[path.extname(m.filename).toLowerCase()] ?? null,
+      }))
+    );
+  }
 
   return { slug };
 }
@@ -208,8 +222,11 @@ async function readEntry(folder: string, relPath: string): Promise<StagingEntry>
   }
   const frontmatter = result.data;
   const mediaFiles = await resolveMedia(folder, frontmatter);
-  if (mediaFiles.length === 0) {
-    return { kind: "error", folder, relPath, message: "nenhuma mídia encontrada" };
+  const hasCaption = Boolean(
+    (frontmatter.caption_li ?? "").trim() || (frontmatter.caption_ig ?? "").trim()
+  );
+  if (mediaFiles.length === 0 && !hasCaption) {
+    return { kind: "error", folder, relPath, message: "nenhuma mídia nem legenda encontrada" };
   }
   return { kind: "ok", folder, relPath, frontmatter, mediaFiles };
 }
